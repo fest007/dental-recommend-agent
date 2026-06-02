@@ -10,11 +10,14 @@ __pycache__/
 *.egg
 dist/
 build/
-*.spec
 .venv/
 venv/
 env/
 *.whl
+
+# PyInstaller spec (保留 backend.spec)
+backend/build/
+backend/dist/
 
 # === Node.js ===
 node_modules/
