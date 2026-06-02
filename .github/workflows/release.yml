@@ -11,6 +11,9 @@ on:
       - 'v*'  # 推送 v1.0.0 这样的 tag 时触发
   workflow_dispatch:  # 允许手动触发
 
+permissions:
+  contents: write  # 需要写入权限来创建 Release
+
 jobs:
   # =========================================================================
   # Job 1: 构建 macOS DMG
@@ -55,7 +58,7 @@ jobs:
 
       - name: Build DMG
         run: |
-          npx electron-builder --mac --config
+          npx electron-builder --mac --config --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -109,7 +112,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          npx electron-builder --win --config
+          npx electron-builder --win --config --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
