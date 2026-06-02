@@ -1,0 +1,178 @@
+# =============================================================================
+# GitHub Actions: 自动构建并发布到 Release
+# 触发条件: 推送 tag (v*)
+# =============================================================================
+
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 推送 v1.0.0 这样的 tag 时触发
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  # =========================================================================
+  # Job 1: 构建 macOS DMG
+  # =========================================================================
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        run: |
+          npm install
+          cd frontend && npm install && cd ..
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Build backend (PyInstaller)
+        run: |
+          cd backend
+          pyinstaller backend.spec --clean --noconfirm
+
+      - name: Build DMG
+        run: |
+          npx electron-builder --mac --config
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: release/*.dmg
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 2: 构建 Windows EXE
+  # =========================================================================
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        run: |
+          npm install
+          cd frontend && npm install && cd ..
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Build backend (PyInstaller)
+        run: |
+          cd backend
+          pyinstaller backend.spec --clean --noconfirm
+
+      - name: Build EXE
+        run: |
+          npx electron-builder --win --config
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-exe
+          path: release/*.exe
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 3: 创建 GitHub Release
+  # =========================================================================
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dmg
+          path: artifacts/mac
+
+      - name: Download EXE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win-exe
+          path: artifacts/win
+
+      - name: List artifacts
+        run: |
+          echo "=== macOS ==="
+          ls -la artifacts/mac/
+          echo "=== Windows ==="
+          ls -la artifacts/win/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 牙科设备推荐Agent ${{ github.ref_name }}
+          body: |
+            ## 牙科设备推荐Agent ${{ github.ref_name }}
+
+            ### 下载
+
+            | 平台 | 文件 | 说明 |
+            |------|------|------|
+            | macOS | `*.dmg` | 双击安装 |
+            | Windows | `*.exe` | 双击安装 |
+
+            ### 更新内容
+            - （请在此处填写更新内容）
+
+            ### 安装说明
+            - **macOS**: 双击 .dmg 文件，拖拽到 Applications
+            - **Windows**: 双击 .exe 文件，按向导安装
+          files: |
+            artifacts/mac/*
+            artifacts/win/*
+          draft: true  # 先创建草稿，手动确认后发布
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

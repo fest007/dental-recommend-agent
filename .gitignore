@@ -1,0 +1,82 @@
+# =============================================================================
+# 牙科设备推荐Agent - Git Ignore
+# =============================================================================
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.spec
+.venv/
+venv/
+env/
+*.whl
+
+# === Node.js ===
+node_modules/
+frontend/dist/
+frontend/.vite/
+.npm
+*.tgz
+
+# === 数据库和运行时数据 ===
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# === 配置文件（可能包含密钥）===
+backend/config.yaml
+config.yaml
+
+# === 日志 ===
+*.log
+logs/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# === 操作系统 ===
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# === Electron 构建产物 ===
+release/
+out/
+dist/
+
+# === PyInstaller 构建产物 ===
+backend/build/
+backend/dist/
+*.spec.bak
+
+# === 环境变量 ===
+.env
+.env.local
+.env.*.local
+
+# === 敏感数据 ===
+*.key
+*.pem
+*.crt
+
+# === 内部文档 ===
+tech_design.md
+AGENT_ARCHITECTURE.md
+
+# === 其他 ===
+*.bak
+*.tmp
+*.temp
+.cache/
