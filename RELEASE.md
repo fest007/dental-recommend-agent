@@ -43,7 +43,7 @@ git push origin v1.0.1
 
 或者使用快捷脚本：
 ```bash
-./release.sh 1.0.1
+./scripts/release.sh 1.0.1
 ```
 
 #### 4. 等待构建

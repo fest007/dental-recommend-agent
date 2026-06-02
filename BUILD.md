@@ -7,7 +7,7 @@
 在 Mac 上直接打包：
 
 ```bash
-./build-dmg.sh
+./scripts/build-dmg.sh
 ```
 
 ### Windows EXE
@@ -15,7 +15,7 @@
 **在 Windows 上打包**（推荐）：
 
 ```cmd
-build-exe.bat
+scripts\build-exe.bat
 ```
 
 **在 Mac 上交叉编译**（需要 Wine）：
@@ -25,13 +25,13 @@ build-exe.bat
 brew install --cask wine-stable
 
 # 打包
-./build-exe.sh
+./scripts/build-exe.sh
 ```
 
 ### 同时打包
 
 ```bash
-./build-all.sh
+./scripts/build-all.sh
 ```
 
 ---
@@ -42,7 +42,7 @@ brew install --cask wine-stable
 |------|------|------|
 | `build-dmg.sh` | macOS | 打包 macOS DMG |
 | `build-exe.sh` | macOS | 打包 Windows EXE（需要 Wine） |
-| `build-exe.bat` | Windows | 打包 Windows EXE |
+| `scripts\build-exe.bat` | Windows | 打包 Windows EXE |
 | `build-all.sh` | macOS | 打包所有平台 |
 
 ---
@@ -53,13 +53,13 @@ brew install --cask wine-stable
 
 A: PyInstaller 只能打包当前系统的可执行文件。在 Mac 上打包的后端是 macOS 格式，Windows 无法运行。
 
-**解决方案**：在 Windows 上运行 `build-exe.bat`
+**解决方案**：在 Windows 上运行 `scripts\build-exe.bat`
 
 ### Q: Mac 上能打包 Windows EXE 吗？
 
 A: 可以，但需要：
 1. 安装 Wine：`brew install --cask wine-stable`
-2. 运行 `./build-exe.sh`
+2. 运行 `./scripts/build-exe.sh`
 
 注意：这种方式打包的后端可能需要在 Windows 上重新构建。
 
@@ -82,11 +82,11 @@ cd frontend && npm install && cd ..
 cd backend && pip install -r requirements.txt && pip install pyinstaller && cd ..
 
 # 打包 DMG
-./build-dmg.sh
+./scripts/build-dmg.sh
 
 # 如果也要打包 EXE
 brew install --cask wine-stable
-./build-exe.sh
+./scripts/build-exe.sh
 ```
 
 ### Windows 用户
@@ -98,5 +98,5 @@ cd frontend && npm install && cd ..
 cd backend && pip install -r requirements.txt && pip install pyinstaller && cd ..
 
 REM 打包 EXE
-build-exe.bat
+scripts\build-exe.bat
 ```

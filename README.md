@@ -99,20 +99,20 @@ npm run dev:frontend  # 前端 http://localhost:5173
 ### macOS DMG
 
 ```bash
-./build-dmg.sh
+./scripts/build-dmg.sh
 ```
 
 ### Windows EXE
 
 ```cmd
 # 在 Windows 上运行
-build-exe.bat
+scripts/build-exe.bat
 ```
 
 ### 所有平台
 
 ```bash
-./build-all.sh
+./scripts/build-all.sh
 ```
 
 详细说明见 [BUILD.md](BUILD.md)
@@ -121,7 +121,7 @@ build-exe.bat
 
 ```bash
 # 自动发布（需要先提交代码）
-./release.sh 1.0.0
+./scripts/release.sh 1.0.0
 ```
 
 详细说明见 [RELEASE.md](RELEASE.md)
@@ -153,7 +153,7 @@ dental-recommend-agent/
 │   └── release.yml             # 自动发布配置
 ├── build-dmg.sh                # 打包 macOS
 ├── build-exe.sh                # 打包 Windows (Mac)
-├── build-exe.bat               # 打包 Windows
+├── scripts/build-exe.bat               # 打包 Windows
 ├── build-all.sh                # 打包所有平台
 ├── release.sh                  # 发布脚本
 └── package.json
