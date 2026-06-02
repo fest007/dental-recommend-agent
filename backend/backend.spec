@@ -20,7 +20,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('config.yaml.example', '.'),
-        ('data', 'data'),
     ],
     hiddenimports=[
         'uvicorn.logging',
