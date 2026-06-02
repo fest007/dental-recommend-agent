@@ -66,8 +66,18 @@ async def health():
 
 
 if __name__ == "__main__":
+    import shutil
     import uvicorn
-    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+
+    config_dir = os.path.dirname(__file__) if os.path.dirname(__file__) else "."
+    config_path = os.path.join(config_dir, "config.yaml")
+    example_path = os.path.join(config_dir, "config.yaml.example")
+
+    # 如果 config.yaml 不存在，从 example 复制
+    if not os.path.exists(config_path) and os.path.exists(example_path):
+        shutil.copy2(example_path, config_path)
+        print(f"[init] 已从 config.yaml.example 创建 config.yaml")
+
     with open(config_path) as f:
         config = yaml.safe_load(f)
     is_dev = os.environ.get("DENTAL_AGENT_DEV", "").lower() in ("1", "true", "yes")

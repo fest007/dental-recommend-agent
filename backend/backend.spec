@@ -19,7 +19,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('config.yaml', '.'),
+        ('config.yaml.example', '.'),
         ('data', 'data'),
     ],
     hiddenimports=[
