@@ -50,20 +50,24 @@
         "filter": ["**/*"]
       },
       {
-        "from": "backend/config.yaml",
-        "to": "config.yaml"
+        "from": "backend/config.yaml.example",
+        "to": "backend/config.yaml.example"
       }
     ],
     "mac": {
       "target": "dmg",
       "icon": "electron/icon.icns",
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
     },
     "dmg": {
       "contents": [
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
-      ]
+      ],
+      "sign": false
     },
     "win": {
       "target": "nsis",

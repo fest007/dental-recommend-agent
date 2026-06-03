@@ -1,5 +1,6 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
@@ -7,10 +8,11 @@ let mainWindow = null;
 let pythonProcess = null;
 
 const isDev = !app.isPackaged;
-const BACKEND_URL = 'http://localhost:8765';
+const BACKEND_PORT = 8765;
+const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 const HEALTH_ENDPOINT = `${BACKEND_URL}/api/health`;
-const HEALTH_POLL_INTERVAL = 500; // ms
-const HEALTH_POLL_TIMEOUT = 30000; // ms
+const HEALTH_POLL_INTERVAL = 500;
+const HEALTH_POLL_TIMEOUT = 30000;
 
 // ---------------------------------------------------------------------------
 // Content-Security-Policy
@@ -33,32 +35,45 @@ function setDefaultCSP() {
 // ---------------------------------------------------------------------------
 // Python backend management
 // ---------------------------------------------------------------------------
-function getPythonExecutable() {
-  if (isDev) {
-    return process.platform === 'win32' ? 'python' : 'python3';
-  }
-  // PyInstaller one-dir output: resources/backend/backend(.exe)
-  const ext = process.platform === 'win32' ? '.exe' : '';
-  return path.join(process.resourcesPath, 'backend', `backend${ext}`);
-}
-
-function getBackendCwd() {
+function getBackendDir() {
   if (isDev) {
     return path.join(__dirname, '..', 'backend');
   }
-  // data/ and config.yaml live at resourcesPath level
-  return process.resourcesPath;
+  return path.join(process.resourcesPath, 'backend');
+}
+
+function getPythonExecutable() {
+  const backendDir = getBackendDir();
+  const ext = process.platform === 'win32' ? '.exe' : '';
+  return path.join(backendDir, `backend${ext}`);
+}
+
+// 初始化配置文件（如果不存在）
+function initConfig() {
+  const backendDir = getBackendDir();
+  const configPath = path.join(backendDir, 'config.yaml');
+  const examplePath = path.join(backendDir, 'config.yaml.example');
+
+  if (!fs.existsSync(configPath) && fs.existsSync(examplePath)) {
+    console.log('[main] Creating config.yaml from example...');
+    fs.copyFileSync(examplePath, configPath);
+  }
 }
 
 function startPythonBackend() {
   const executable = getPythonExecutable();
-  const cwd = getBackendCwd();
+  const backendDir = getBackendDir();
   const dataDir = app.getPath('userData');
 
-  console.log(`[main] Starting backend: ${executable} main.py (cwd: ${cwd}, data: ${dataDir})`);
+  // 确保数据目录存在
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  console.log(`[main] Starting backend: ${executable} (dir: ${backendDir}, data: ${dataDir})`);
 
   const options = {
-    cwd,
+    cwd: backendDir,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: process.platform === 'win32',
     env: {
@@ -68,11 +83,7 @@ function startPythonBackend() {
     },
   };
 
-  if (isDev) {
-    pythonProcess = spawn(executable, ['main.py'], options);
-  } else {
-    pythonProcess = spawn(executable, [], options);
-  }
+  pythonProcess = spawn(executable, [], options);
 
   pythonProcess.stdout.on('data', (data) => {
     console.log(`[backend:stdout] ${data.toString().trim()}`);
@@ -97,7 +108,6 @@ function killPythonBackend() {
   console.log('[main] Killing backend process...');
   try {
     pythonProcess.kill('SIGTERM');
-    // Force kill after 3 seconds if still alive
     setTimeout(() => {
       if (pythonProcess) {
         console.log('[main] Force-killing backend process...');
@@ -124,7 +134,7 @@ function pollHealth() {
         } else {
           retry();
         }
-        res.resume(); // consume response
+        res.resume();
       });
 
       req.on('error', () => retry());
@@ -154,6 +164,7 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: '牙科设备推荐Agent',
+    show: false, // 先隐藏窗口，等加载完成后再显示
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -165,8 +176,21 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+    // 生产模式：加载打包后的前端文件
+    const indexPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
+    console.log('[main] Loading index.html from:', indexPath);
+    mainWindow.loadFile(indexPath);
   }
+
+  // 窗口加载完成后显示
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // 加载失败时显示错误
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('[main] Failed to load:', errorCode, errorDescription);
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -179,6 +203,9 @@ function createWindow() {
 app.whenReady().then(async () => {
   setDefaultCSP();
 
+  // 初始化配置文件
+  initConfig();
+
   // Start Python backend and wait for it to be ready
   startPythonBackend();
 
@@ -187,27 +214,29 @@ app.whenReady().then(async () => {
     console.log('[main] Backend is ready.');
   } catch (err) {
     console.error('[main] Backend failed to start:', err.message);
-    // Still open the window so the user sees something
+    dialog.showErrorBox(
+      '启动失败',
+      `后端服务启动失败：${err.message}\n\n请检查是否有其他程序占用了端口 ${BACKEND_PORT}`
+    );
+    app.quit();
+    return;
   }
 
   createWindow();
 
   app.on('activate', () => {
-    // macOS: re-create window when dock icon is clicked and no windows exist
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
 
-// Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-// Clean up backend process before quitting
 app.on('before-quit', () => {
   killPythonBackend();
 });
