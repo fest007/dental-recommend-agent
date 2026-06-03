@@ -151,6 +151,13 @@ export default function BackendStatus({ children }: BackendStatusProps) {
     }
   }, [checkStatus, retryCount])
 
+  // React 主应用挂载后通知主进程，写 renderer-ready marker
+  useEffect(() => {
+    if (isReady && window.electronAPI?.notifyRendererReady) {
+      window.electronAPI.notifyRendererReady()
+    }
+  }, [isReady])
+
   if (isReady) {
     return <>{children}</>
   }

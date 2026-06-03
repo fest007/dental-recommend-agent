@@ -61,7 +61,7 @@ echo [√] 前端构建完成
 echo.
 
 REM 构建后端
-echo [2/4] 打包 Python 后端...
+echo [2/5] 打包 Python 后端...
 cd backend
 call pyinstaller backend.spec --clean --noconfirm
 if not exist dist\backend (
@@ -72,14 +72,14 @@ cd ..
 echo [√] 后端打包完成
 echo.
 
-REM Smoke test
-echo [3/4] 验证后端可执行文件...
+REM Smoke test — 基础存活检查
+echo [3/5] 验证后端可执行文件...
 cd backend\dist\backend
 start /B backend.exe
 timeout /t 5 /nobreak >nul
 tasklist /FI "IMAGENAME eq backend.exe" | find /I "backend.exe" >nul
 if %errorlevel% equ 0 (
-    echo [√] 后端 smoke test 通过
+    echo [√] 后端基础 smoke test 通过
     taskkill /F /IM backend.exe >nul 2>&1
 ) else (
     echo [错误] 后端 smoke test 失败 - 进程异常退出
@@ -88,8 +88,18 @@ if %errorlevel% equ 0 (
 cd ..\..\..
 echo.
 
+REM Smoke test — 端口碰撞
+echo [3.5/5] 验证端口碰撞场景...
+powershell -ExecutionPolicy Bypass -File scripts\smoke-test-backend.ps1
+if %errorlevel% neq 0 (
+    echo [错误] 端口碰撞 smoke test 失败
+    exit /b 1
+)
+echo [√] 端口碰撞 smoke test 通过
+echo.
+
 REM 打包 Electron
-echo [4/4] 打包 Windows EXE...
+echo [4/5] 打包 Windows EXE...
 call npm ci
 call npx electron-builder --win --config --publish never
 if %errorlevel% neq 0 (
@@ -97,6 +107,16 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo [√] 打包完成
+echo.
+
+REM Smoke test — Electron 集成
+echo [5/5] 验证 Electron 完整启动链路...
+powershell -ExecutionPolicy Bypass -File scripts\smoke-test-electron.ps1
+if %errorlevel% neq 0 (
+    echo [错误] Electron 集成 smoke test 失败
+    exit /b 1
+)
+echo [√] Electron 集成 smoke test 通过
 echo.
 
 REM 显示结果

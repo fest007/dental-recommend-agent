@@ -116,6 +116,25 @@ function getBackendURL() {
   return `http://localhost:${backendPort}`;
 }
 
+function getPortFilePath() {
+  return path.join(getBackendDataDir(), 'port.json');
+}
+
+function readPortFromFile() {
+  try {
+    const portFile = getPortFilePath();
+    if (fs.existsSync(portFile)) {
+      const info = JSON.parse(fs.readFileSync(portFile, 'utf-8'));
+      if (info && typeof info.port === 'number') {
+        return info.port;
+      }
+    }
+  } catch (err) {
+    console.error('[main] Failed to read port.json:', err.message);
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // IPC handlers
 // ---------------------------------------------------------------------------
@@ -132,8 +151,19 @@ function setupIPC() {
     return startupStatus;
   });
 
+  ipcMain.handle('notify-renderer-ready', () => {
+    try {
+      fs.writeFileSync(path.join(getBackendDataDir(), 'renderer-ready'), String(Date.now()));
+    } catch {}
+  });
+
   ipcMain.handle('restart-backend', async () => {
     console.log('[main] Restarting backend...');
+    // 清掉上一轮的健康检查定时器，防止旧轮询串进新一轮
+    if (healthCheckTimer) {
+      clearTimeout(healthCheckTimer);
+      healthCheckTimer = null;
+    }
     killPythonBackend();
     await new Promise(resolve => setTimeout(resolve, 500));
     backendExited = false;
@@ -294,11 +324,14 @@ function notifyStartupStatus() {
 // 健康检查
 // ---------------------------------------------------------------------------
 function startHealthCheck() {
-  const healthEndpoint = `http://localhost:${backendPort}/api/health`;
   const startTime = Date.now();
   const maxWait = 60000; // 60 秒超时
 
-  console.log(`[main] Starting health check on ${healthEndpoint}`);
+  function currentEndpoint() {
+    return `http://localhost:${backendPort}/api/health`;
+  }
+
+  console.log(`[main] Starting health check, waiting for port.json from backend`);
 
   function check() {
     // 如果后端已经退出，停止检查
@@ -309,6 +342,14 @@ function startHealthCheck() {
 
     if (backendReady) return;
 
+    // 从 port.json 读取后端实际选用的端口
+    const filePort = readPortFromFile();
+    if (filePort !== null && filePort !== backendPort) {
+      console.log(`[main] Port updated from port.json: ${backendPort} -> ${filePort}`);
+      backendPort = filePort;
+    }
+
+    const healthEndpoint = currentEndpoint();
     const req = http.get(healthEndpoint, (res) => {
       if (res.statusCode === 200) {
         console.log('[main] Backend health check passed!');
@@ -365,12 +406,27 @@ function startHealthCheck() {
 // 启动后端 + 健康检查
 // ---------------------------------------------------------------------------
 function startBackendWithHealthCheck() {
+  // 清掉残留的健康检查定时器
+  if (healthCheckTimer) {
+    clearTimeout(healthCheckTimer);
+    healthCheckTimer = null;
+  }
+
   const config = loadConfig();
   backendPort = config?.server?.port || 8765;
-  console.log(`[main] Using port: ${backendPort}`);
+  console.log(`[main] Config port: ${backendPort}`);
 
   startupStatus = 'initializing';
   notifyStartupStatus();
+
+  // 在启动后端之前清理旧的 port.json 和 renderer-ready marker
+  // 放在 spawn 之前，这样后端写出的新文件不会被误删
+  try {
+    const portFile = getPortFilePath();
+    if (fs.existsSync(portFile)) fs.unlinkSync(portFile);
+    const markerFile = path.join(getBackendDataDir(), 'renderer-ready');
+    if (fs.existsSync(markerFile)) fs.unlinkSync(markerFile);
+  } catch {}
 
   // 启动后端
   startPythonBackend();
@@ -488,6 +544,7 @@ function loadApp() {
     console.log('[main] Loading app from:', indexPath);
     mainWindow.loadFile(indexPath);
   }
+
 }
 
 // ---------------------------------------------------------------------------

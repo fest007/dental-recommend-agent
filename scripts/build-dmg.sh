@@ -41,7 +41,7 @@ rm -rf frontend/dist backend/dist backend/build release
 print_success "清理完成"
 
 # 构建前端
-print_step "1/3" "构建 React 前端..."
+print_step "1/5" "构建 React 前端..."
 cd frontend
 npm ci
 npm run build
@@ -50,21 +50,21 @@ cd ..
 print_success "前端构建完成"
 
 # 构建后端
-print_step "2/4" "打包 Python 后端..."
+print_step "2/5" "打包 Python 后端..."
 cd backend
 pyinstaller backend.spec --clean --noconfirm
 [ ! -d "dist/backend" ] && print_error "后端打包失败"
 cd ..
 print_success "后端打包完成"
 
-# Smoke test
-print_step "3/4" "验证后端可执行文件..."
+# Smoke test — 基础存活检查
+print_step "3/5" "验证后端可执行文件..."
 cd backend/dist/backend
 ./backend &
 BACKEND_PID=$!
 sleep 5
 if kill -0 $BACKEND_PID 2>/dev/null; then
-    print_success "后端 smoke test 通过"
+    print_success "后端基础 smoke test 通过"
     kill $BACKEND_PID
     wait $BACKEND_PID 2>/dev/null
 else
@@ -72,11 +72,21 @@ else
 fi
 cd ../../..
 
+# Smoke test — 端口碰撞
+print_step "3.5/5" "验证端口碰撞场景..."
+bash scripts/smoke-test-backend.sh
+print_success "端口碰撞 smoke test 通过"
+
 # 打包 DMG
-print_step "3/3" "打包 macOS DMG..."
+print_step "4/5" "打包 macOS DMG..."
 npm ci
 npx electron-builder --mac --config --publish never
 print_success "DMG 打包完成"
+
+# Smoke test — Electron 集成
+print_step "5/5" "验证 Electron 完整启动链路..."
+bash scripts/smoke-test-electron.sh
+print_success "Electron 集成 smoke test 通过"
 
 # 显示结果
 echo ""

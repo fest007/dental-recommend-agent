@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 重启后端
   restartBackend: () => ipcRenderer.invoke('restart-backend'),
 
+  // 前端渲染就绪通知
+  notifyRendererReady: () => ipcRenderer.invoke('notify-renderer-ready'),
+
   // 监听事件
   onBackendReady: (callback) => {
     ipcRenderer.on('backend-ready', (event, data) => callback(data));

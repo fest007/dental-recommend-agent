@@ -57,7 +57,7 @@ jobs:
           pyinstaller backend.spec --clean --noconfirm
 
       # Smoke test: 验证打包后的后端能正常启动
-      - name: Smoke test backend
+      - name: Smoke test backend (basic)
         run: |
           cd backend/dist/backend
           # 启动后端
@@ -76,11 +76,19 @@ jobs:
             exit 1
           fi
 
+      # Smoke test: 端口碰撞场景
+      - name: Smoke test backend (port collision)
+        run: bash scripts/smoke-test-backend.sh
+
       - name: Build DMG
         run: |
           npx electron-builder --mac --config --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Smoke test: Electron 完整启动链路
+      - name: Smoke test Electron (integration)
+        run: bash scripts/smoke-test-electron.sh
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
@@ -131,7 +139,7 @@ jobs:
           pyinstaller backend.spec --clean --noconfirm
 
       # Smoke test: 验证打包后的后端能正常启动
-      - name: Smoke test backend
+      - name: Smoke test backend (basic)
         run: |
           cd backend/dist/backend
           # 启动后端
@@ -147,11 +155,21 @@ jobs:
           }
         shell: pwsh
 
+      # Smoke test: 端口碰撞场景
+      - name: Smoke test backend (port collision)
+        run: powershell -ExecutionPolicy Bypass -File scripts\smoke-test-backend.ps1
+        shell: cmd
+
       - name: Build EXE
         run: |
           npx electron-builder --win --config --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Smoke test: Electron 完整启动链路
+      - name: Smoke test Electron (integration)
+        run: powershell -ExecutionPolicy Bypass -File scripts\smoke-test-electron.ps1
+        shell: cmd
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
