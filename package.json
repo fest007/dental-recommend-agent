@@ -14,10 +14,13 @@
     "electron:dev": "wait-on http://localhost:5173 && electron .",
     "dist:mac": "npm run build && npm run build:backend && electron-builder --mac --publish never"
   },
+  "dependencies": {
+    "js-yaml": "^4.2.0"
+  },
   "devDependencies": {
+    "concurrently": "^8.2.0",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.0",
-    "concurrently": "^8.2.0",
     "wait-on": "^7.2.0"
   },
   "build": {
@@ -45,7 +48,9 @@
       {
         "from": "backend/dist/backend",
         "to": "backend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "backend/config.yaml.example",
@@ -62,15 +67,25 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ],
       "sign": false
     },
     "win": {
       "target": "nsis",
       "icon": "electron/icon.ico",
-      "arch": ["x64"]
+      "arch": [
+        "x64"
+      ]
     },
     "nsis": {
       "oneClick": false,

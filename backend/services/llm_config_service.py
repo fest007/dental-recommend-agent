@@ -114,7 +114,18 @@ _DEFAULTS: dict = {
 # ---------------------------------------------------------------------------
 # config.yaml fallback (loaded once at import time)
 # ---------------------------------------------------------------------------
-_CONFIG_YAML_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+def _get_config_path() -> str:
+    """Get config.yaml path, prioritizing DENTAL_AGENT_DATA_DIR."""
+    # 优先从环境变量指定的数据目录读取
+    data_dir = os.environ.get("DENTAL_AGENT_DATA_DIR")
+    if data_dir:
+        config_path = os.path.join(data_dir, "config.yaml")
+        if os.path.exists(config_path):
+            return config_path
+    # 回退到 backend 目录
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+
+_CONFIG_YAML_PATH = _get_config_path()
 
 def _load_yaml_defaults() -> dict:
     """Read the ``llm`` section from config.yaml, returning {} on any failure."""
