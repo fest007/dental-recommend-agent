@@ -107,24 +107,29 @@ try {
         New-Item -ItemType Directory -Path $BackendDataDir -Force | Out-Null
     }
 
-    # 4. Uninstall old version if present
+    # 4. Kill any lingering app/backend processes from previous runs
+    Get-Process -Name "backend","*Agent*","electron" -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
+    # 5. Uninstall old version if present
     Resolve-InstallDir
     $oldUninst = Find-Uninstaller
     if ($oldUninst) {
         Write-Step "Removing old install ..."
         Start-Process -FilePath $oldUninst -ArgumentList "/S" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 5
     }
 
-    # 5. Silent NSIS install
+    # 6. Silent NSIS install
     Write-Step "Silent-installing NSIS package ..."
     $installResult = Start-Process -FilePath $InstallerExe.FullName -ArgumentList "/S" -Wait -PassThru -WindowStyle Hidden
     if ($installResult.ExitCode -ne 0) {
         Write-Fail "NSIS install failed (exit $($installResult.ExitCode))"
     }
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 5
 
-    # 6. Find installed app
+    # 7. Find installed app
     Resolve-InstallDir
     $InstalledExe = Find-InstalledExe
     if (-not $InstalledExe) {
@@ -132,12 +137,12 @@ try {
     }
     Write-Ok "Installed: $InstalledExe"
 
-    # 7. Launch installed app (flags for headless CI rendering)
+    # 8. Launch installed app (flags for headless CI rendering)
     Write-Step "Launching installed app ..."
     $AppProcess = Start-Process -FilePath $InstalledExe -ArgumentList "--no-sandbox","--disable-gpu" -PassThru -WindowStyle Hidden
     Write-Ok "App started (PID $($AppProcess.Id))"
 
-    # 8. Wait for port.json
+    # 9. Wait for port.json
     Write-Step "Waiting for port.json (up to 45s) ..."
     $found = $false
     for ($i = 0; $i -lt 90; $i++) {
@@ -150,14 +155,14 @@ try {
     if (-not $found) { Write-Fail "port.json not found within 45s" }
     Write-Ok "port.json created"
 
-    # 9. Verify port changed
+    # 10. Verify port changed
     $info = Get-Content $PortJson -Raw | ConvertFrom-Json
     $actualPort = $info.port
     Write-Step "Actual port: $actualPort"
     if ($actualPort -eq $OccupiedPort) { Write-Fail "Port not changed" }
     Write-Ok "Port switched: $OccupiedPort -> $actualPort"
 
-    # 10. Health check
+    # 11. Health check
     $healthUrl = "http://127.0.0.1:${actualPort}/api/health"
     Write-Step "Health check: $healthUrl ..."
     $ok = $false
@@ -173,7 +178,7 @@ try {
     if (-not $ok) { Write-Fail "Health check failed" }
     Write-Ok "Health check passed"
 
-    # 11. Verify renderer loaded
+    # 12. Verify renderer loaded
     $marker = Join-Path $BackendDataDir "renderer-ready"
     Write-Step "Waiting for renderer-ready (up to 45s) ..."
     $markerOk = $false
