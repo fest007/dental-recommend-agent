@@ -20,6 +20,8 @@ print_info() { echo -e "${YELLOW}→${NC} $1"; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_NAME="牙科设备推荐Agent"
+# Electron userData 目录用 package.json 的 name 字段，不是 productName
+APP_PKG_NAME="dental-recommend-agent"
 OCCUPIED_PORT=8765
 
 # ---------- 定位打包产物 ----------
@@ -35,7 +37,7 @@ fi
 print_ok "找到 App bundle: $APP_BUNDLE"
 
 # ---------- 准备 ----------
-USER_DATA_DIR="$HOME/Library/Application Support/$APP_NAME"
+USER_DATA_DIR="$HOME/Library/Application Support/$APP_PKG_NAME"
 BACKEND_DATA_DIR="$USER_DATA_DIR/backend-data"
 PORT_JSON="$BACKEND_DATA_DIR/port.json"
 

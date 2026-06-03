@@ -11,8 +11,10 @@ function Write-Ok   { param($msg) Write-Host "✓ $msg" -ForegroundColor Green }
 function Write-Fail { param($msg) Write-Host "✗ $msg" -ForegroundColor Red; exit 1 }
 function Write-Step { param($msg) Write-Host "→ $msg" -ForegroundColor Yellow }
 
-$ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$AppName     = "牙科设备推荐Agent"
+$ProjectRoot  = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$AppName      = "牙科设备推荐Agent"
+# Electron userData 目录用 package.json 的 name 字段，不是 productName
+$AppPkgName   = "dental-recommend-agent"
 $OccupiedPort = 8765
 
 # ---------- 定位 NSIS 安装包 ----------
@@ -27,7 +29,7 @@ Write-Ok "找到安装包: $($InstallerExe.FullName)"
 $InstallDir     = Join-Path $env:LOCALAPPDATA "Programs\$AppName"
 $InstalledExe   = Join-Path $InstallDir "$AppName.exe"
 $UninstallExe   = Join-Path $InstallDir "Uninstall $AppName.exe"
-$UserDataDir    = Join-Path $env:APPDATA $AppName
+$UserDataDir    = Join-Path $env:APPDATA $AppPkgName
 $BackendDataDir = Join-Path $UserDataDir "backend-data"
 $PortJson       = Join-Path $BackendDataDir "port.json"
 
