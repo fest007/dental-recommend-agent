@@ -1,34 +1,35 @@
 # =============================================================================
-# Electron 集成 Smoke Test (Windows)
-# 验证：NSIS 安装后，在端口被占用的情况下，应用能自动换端口并正常启动
-# 流程：占 8765 → 静默安装 NSIS → 启动安装后的应用 → 读 port.json → 健康检查 → 卸载
-# 用法：从项目根目录运行，需要先完成 electron-builder --win
+# Electron Integration Smoke Test (Windows)
+# Flow: occupy 8765 -> silent NSIS install -> launch installed app ->
+#       wait port.json -> verify port changed -> health check ->
+#       verify renderer loaded -> uninstall
 # =============================================================================
 
 $ErrorActionPreference = "Stop"
 
-function Write-Ok   { param($msg) Write-Host "✓ $msg" -ForegroundColor Green }
-function Write-Fail { param($msg) Write-Host "✗ $msg" -ForegroundColor Red; exit 1 }
-function Write-Step { param($msg) Write-Host "→ $msg" -ForegroundColor Yellow }
+function Write-Ok   { param([string]$msg) Write-Host "[ok] $msg" -ForegroundColor Green }
+function Write-Fail { param([string]$msg) Write-Host "[fail] $msg" -ForegroundColor Red; exit 1 }
+function Write-Step { param([string]$msg) Write-Host ">> $msg" -ForegroundColor Yellow }
 
-$ProjectRoot  = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$AppName      = "牙科设备推荐Agent"
-# Electron userData 目录用 package.json 的 name 字段，不是 productName
-$AppPkgName   = "dental-recommend-agent"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$AppPkgName  = "dental-recommend-agent"
 $OccupiedPort = 8765
 
-# ---------- 定位 NSIS 安装包 ----------
+# Find the installed app dir dynamically (productName has Chinese chars)
+$ProgramsDir = Join-Path $env:LOCALAPPDATA "Programs"
+$InstallDir  = Get-ChildItem $ProgramsDir -Directory | Where-Object { $_.Name -match "Agent" } | Select-Object -First 1 -ExpandProperty FullName
+if (-not $InstallDir) { $InstallDir = Join-Path $ProgramsDir "dental-recommend-agent" }
+
+# Locate NSIS installer
 $InstallerExe = Get-ChildItem "$ProjectRoot\release\*Setup*.exe" | Select-Object -First 1
 if (-not $InstallerExe) {
-    Write-Fail "未找到 NSIS 安装包（请先运行 electron-builder --win）"
+    Write-Fail "NSIS installer not found (run electron-builder --win first)"
 }
-Write-Ok "找到安装包: $($InstallerExe.FullName)"
+Write-Ok "Installer: $($InstallerExe.FullName)"
 
-# ---------- 准备 ----------
-# NSIS 非 oneClick 默认装到 $LOCALAPPDATA\Programs\<productName>
-$InstallDir     = Join-Path $env:LOCALAPPDATA "Programs\$AppName"
-$InstalledExe   = Join-Path $InstallDir "$AppName.exe"
-$UninstallExe   = Join-Path $InstallDir "Uninstall $AppName.exe"
+# Paths - use wildcards to avoid Chinese char encoding issues
+$InstalledExe   = Get-ChildItem "$InstallDir\*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch "Uninstall" } | Select-Object -First 1 -ExpandProperty FullName
+$UninstallExe   = Get-ChildItem "$InstallDir\Uninstall*" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
 $UserDataDir    = Join-Path $env:APPDATA $AppPkgName
 $BackendDataDir = Join-Path $UserDataDir "backend-data"
 $PortJson       = Join-Path $BackendDataDir "port.json"
@@ -43,161 +44,144 @@ function Cleanup {
     if ($PortBlockerProcess -and -not $PortBlockerProcess.HasExited) {
         Stop-Process -Id $PortBlockerProcess.Id -Force -ErrorAction SilentlyContinue
     }
-    # 静默卸载
-    if (Test-Path $UninstallExe) {
-        Write-Step "卸载应用 ..."
-        Start-Process -FilePath $UninstallExe -ArgumentList "/S" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
+    # Find and run uninstaller
+    $uninst = Get-ChildItem "$InstallDir\Uninstall*" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    if ($uninst) {
+        Write-Step "Uninstalling ..."
+        Start-Process -FilePath $uninst -ArgumentList "/S" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }
-    # 清理 port.json
     if (Test-Path $PortJson) {
         Remove-Item -Path $PortJson -Force -ErrorAction SilentlyContinue
     }
 }
 
 try {
-    # ---------- 1. 占住首选端口 ----------
-    Write-Step "占用端口 $OccupiedPort ..."
+    # 1. Occupy preferred port
+    Write-Step "Occupying port $OccupiedPort ..."
+    $TmpDir = Join-Path $env:TEMP "smoke-electron-$(Get-Random)"
+    New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
+    $blockerPy = Join-Path $TmpDir "blocker.py"
+    $pyLines = @(
+        "import socket, time, sys",
+        "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)",
+        "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)",
+        "s.bind(('127.0.0.1', $OccupiedPort))",
+        "s.listen(1)",
+        "sys.stdout.flush()",
+        "time.sleep(300)"
+    )
+    $pyLines | Out-File -FilePath $blockerPy -Encoding utf8
+    $PortBlockerProcess = Start-Process -FilePath "python" -ArgumentList $blockerPy -PassThru -WindowStyle Hidden
 
-    $BlockerScript = @"
-import socket, sys, time
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
-s.bind(('127.0.0.1', $OccupiedPort))
-s.listen(1)
-sys.stdout.write('ready\n')
-sys.stdout.flush()
-time.sleep(300)
-"@
-    $PortBlockerProcess = Start-Process -FilePath "python" -ArgumentList "-c", $BlockerScript `
-        -PassThru -WindowStyle Hidden
-
-    # 等待端口占用者就绪
-    $ready = $false
-    for ($i = 0; $i -lt 10; $i++) {
+    $portReady = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Milliseconds 500
         try {
             $tcp = New-Object System.Net.Sockets.TcpClient
             $tcp.Connect("127.0.0.1", $OccupiedPort)
             $tcp.Close()
-            $ready = $true
+            $portReady = $true
             break
-        } catch {
-            Start-Sleep -Milliseconds 300
-        }
+        } catch { }
     }
-    if (-not $ready) { Write-Fail "无法确认端口 $OccupiedPort 已被占用" }
-    Write-Ok "端口 $OccupiedPort 已被占用 (PID $($PortBlockerProcess.Id))"
+    if (-not $portReady) { Write-Fail "Port $OccupiedPort not occupied" }
+    Write-Ok "Port $OccupiedPort occupied (PID $($PortBlockerProcess.Id))"
 
-    # ---------- 2. 清理旧的 port.json ----------
+    # 2. Clean old port.json
     if (Test-Path $BackendDataDir) {
         Remove-Item -Path $PortJson -Force -ErrorAction SilentlyContinue
     } else {
         New-Item -ItemType Directory -Path $BackendDataDir -Force | Out-Null
     }
 
-    # ---------- 3. 静默安装 NSIS ----------
-    Write-Step "静默安装 NSIS 安装包 ..."
-
-    # 先卸载旧版本（如果存在）
-    if (Test-Path $UninstallExe) {
-        Start-Process -FilePath $UninstallExe -ArgumentList "/S" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
+    # 3. Silent NSIS install
+    Write-Step "Silent-installing NSIS package ..."
+    # Uninstall old version if present
+    $oldUninst = Get-ChildItem "$InstallDir\Uninstall*" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    if ($oldUninst) {
+        Start-Process -FilePath $oldUninst -ArgumentList "/S" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }
-
-    # 安装
     $installResult = Start-Process -FilePath $InstallerExe.FullName -ArgumentList "/S" -Wait -PassThru -WindowStyle Hidden
     if ($installResult.ExitCode -ne 0) {
-        Write-Fail "NSIS 安装失败，exit code: $($installResult.ExitCode)"
+        Write-Fail "NSIS install failed (exit $($installResult.ExitCode))"
     }
-
-    # 等待安装完成
     Start-Sleep -Seconds 3
-
-    if (-not (Test-Path $InstalledExe)) {
-        Write-Fail "安装后未找到应用: $InstalledExe"
+    # Refresh installed exe path
+    $InstalledExe = Get-ChildItem "$InstallDir\*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch "Uninstall" } | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $InstalledExe -or -not (Test-Path $InstalledExe)) {
+        Write-Fail "Installed exe not found in $InstallDir"
     }
-    Write-Ok "应用已安装到: $InstallDir"
+    Write-Ok "Installed: $InstalledExe"
 
-    # ---------- 4. 启动安装后的应用 ----------
-    Write-Step "启动安装后的应用 ..."
-
+    # 4. Launch installed app
+    Write-Step "Launching installed app ..."
     $AppProcess = Start-Process -FilePath $InstalledExe -PassThru -WindowStyle Hidden
-    Write-Ok "应用已启动 (PID $($AppProcess.Id))"
+    Write-Ok "App started (PID $($AppProcess.Id))"
 
-    # ---------- 5. 等待 port.json ----------
-    Write-Step "等待 port.json 出现 (最多 45 秒) ..."
-
+    # 5. Wait for port.json
+    Write-Step "Waiting for port.json (up to 45s) ..."
     $found = $false
     for ($i = 0; $i -lt 90; $i++) {
         if (Test-Path $PortJson) { $found = $true; break }
         if ($AppProcess.HasExited) {
-            Write-Fail "应用已退出 (exit code $($AppProcess.ExitCode))，port.json 未生成"
+            Write-Fail "App exited (code $($AppProcess.ExitCode)), no port.json"
         }
         Start-Sleep -Milliseconds 500
     }
-    if (-not $found) { Write-Fail "port.json 未在 45 秒内出现" }
-    Write-Ok "port.json 已生成"
+    if (-not $found) { Write-Fail "port.json not found within 45s" }
+    Write-Ok "port.json created"
 
-    # ---------- 6. 验证端口已切换 ----------
+    # 6. Verify port changed
     $PortInfo   = Get-Content $PortJson -Raw | ConvertFrom-Json
     $ActualPort = $PortInfo.port
-    Write-Step "后端实际端口: $ActualPort"
-
+    Write-Step "Actual port: $ActualPort"
     if ($ActualPort -eq $OccupiedPort) {
-        Write-Fail "端口未切换: port.json 仍为 $OccupiedPort，应为其他端口"
+        Write-Fail "Port not changed, still $OccupiedPort"
     }
-    Write-Ok "端口已切换: $OccupiedPort → $ActualPort"
+    Write-Ok "Port switched: $OccupiedPort -> $ActualPort"
 
-    # ---------- 7. 健康检查 ----------
+    # 7. Health check
     $HealthUrl = "http://127.0.0.1:${ActualPort}/api/health"
-    Write-Step "健康检查: $HealthUrl ..."
-
+    Write-Step "Health check: $HealthUrl ..."
     $passed = $false
     for ($i = 0; $i -lt 10; $i++) {
         try {
             $response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 3
             if ($response.StatusCode -eq 200) {
                 $body = $response.Content | ConvertFrom-Json
-                if ($body.status -eq "ok") {
-                    $passed = $true
-                    break
-                }
+                if ($body.status -eq "ok") { $passed = $true; break }
             }
-        } catch {
-            Start-Sleep -Seconds 1
-        }
+        } catch { Start-Sleep -Seconds 1 }
     }
+    if (-not $passed) { Write-Fail "Health check failed" }
+    Write-Ok "Health check passed: $($response.Content)"
 
-    if (-not $passed) { Write-Fail "健康检查失败: $HealthUrl" }
-    Write-Ok "健康检查通过: $($response.Content)"
-
-    # ---------- 8. 验证渲染层加载 ----------
+    # 8. Verify renderer loaded
     $RendererMarker = Join-Path $BackendDataDir "renderer-ready"
-    Write-Step "等待渲染层加载标记 (最多 30 秒) ..."
-
+    Write-Step "Waiting for renderer-ready marker (up to 30s) ..."
     $markerFound = $false
     for ($i = 0; $i -lt 60; $i++) {
         if (Test-Path $RendererMarker) { $markerFound = $true; break }
         if ($AppProcess.HasExited) {
-            Write-Fail "应用已退出，renderer-ready 未生成"
+            Write-Fail "App exited, renderer-ready not written"
         }
         Start-Sleep -Milliseconds 500
     }
-    if (-not $markerFound) { Write-Fail "renderer-ready 未在 30 秒内出现" }
-    $markerContent = Get-Content $RendererMarker -Raw
-    Write-Ok "渲染层已加载 (marker: $markerContent)"
+    if (-not $markerFound) { Write-Fail "renderer-ready not found within 30s" }
+    Write-Ok "Renderer loaded (marker: $(Get-Content $RendererMarker -Raw))"
 
-    # 停止应用，进入卸载流程
+    # Stop app before uninstall
     Stop-Process -Id $AppProcess.Id -Force -ErrorAction SilentlyContinue
     $AppProcess = $null
     Start-Sleep -Seconds 2
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host " Electron 集成 smoke test 全部通过" -ForegroundColor Green
-    Write-Host "（NSIS 安装 + 端口碰撞 + 后端健康 + 渲染层加载）" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "=== Electron integration smoke test PASSED ===" -ForegroundColor Green
+    Write-Host "=== (NSIS install + port collision + health + renderer) ===" -ForegroundColor Green
 
 } finally {
     Cleanup
+    if (Test-Path $TmpDir) { Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue }
 }
