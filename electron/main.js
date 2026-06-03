@@ -323,23 +323,33 @@ function notifyStartupStatus() {
 // ---------------------------------------------------------------------------
 // 健康检查
 // ---------------------------------------------------------------------------
+function readBackendLog() {
+  try {
+    const logPath = path.join(getBackendDataDir(), 'logs', 'backend.log');
+    if (fs.existsSync(logPath)) {
+      const content = fs.readFileSync(logPath, 'utf-8');
+      const lines = content.split('\n').filter(l => l.trim());
+      return lines.slice(-15).join('\n');
+    }
+  } catch {}
+  return '';
+}
+
 function startHealthCheck() {
   const startTime = Date.now();
-  const maxWait = 60000; // 60 秒超时
+  const maxWait = 180000; // 180 秒 — PyInstaller 冷启动可能很慢
 
   function currentEndpoint() {
     return `http://127.0.0.1:${backendPort}/api/health`;
   }
 
-  console.log(`[main] Starting health check, waiting for port.json from backend`);
+  console.log(`[main] Starting health check (timeout: ${maxWait / 1000}s)`);
 
   function check() {
-    // 如果后端已经退出，停止检查
     if (backendExited) {
       console.log('[main] Backend exited, stopping health check');
       return;
     }
-
     if (backendReady) return;
 
     // 从 port.json 读取后端实际选用的端口
@@ -369,11 +379,15 @@ function startHealthCheck() {
     });
 
     req.on('error', (err) => {
-      console.log(`[main] Health check error: ${err.message}`);
+      // 只在前几次打印，避免刷屏
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 5000 || elapsed % 10000 < 600) {
+        console.log(`[main] Health check: ${err.message} (${Math.round(elapsed / 1000)}s)`);
+      }
       scheduleRetry();
     });
 
-    req.setTimeout(3000, () => {
+    req.setTimeout(5000, () => {
       req.destroy();
       scheduleRetry();
     });
@@ -386,11 +400,23 @@ function startHealthCheck() {
     }
 
     if (Date.now() - startTime > maxWait) {
-      console.error('[main] Health check timed out');
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const logSnippet = readBackendLog();
+      const portInfo = readPortFromFile();
+      let detail = `Backend startup timeout after ${elapsed}s.`;
+      if (portInfo) {
+        detail += `\nPort from port.json: ${portInfo}`;
+      } else {
+        detail += '\nport.json not found — backend may not have started.';
+      }
+      if (logSnippet) {
+        detail += `\n\nBackend log (last 15 lines):\n${logSnippet}`;
+      }
+      console.error('[main] Health check timed out:', detail);
       startupStatus = 'timeout';
       notifyStartupStatus();
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('backend-error', 'Backend startup timeout');
+        mainWindow.webContents.send('backend-error', detail);
       }
       return;
     }
@@ -398,7 +424,6 @@ function startHealthCheck() {
     healthCheckTimer = setTimeout(check, 500);
   }
 
-  // 开始第一次检查
   check();
 }
 
@@ -537,7 +562,7 @@ function loadApp() {
   if (!mainWindow) return;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://127.0.0.1:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     const indexPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
@@ -578,11 +603,11 @@ if (!gotTheLock) {
       }
     }, 500);
 
-    // 最多等待 65 秒
+    // 最多等待 190 秒（比健康检查 180s 多 10s 余量）
     setTimeout(() => {
       clearInterval(checkReady);
       loadApp();
-    }, 65000);
+    }, 190000);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
