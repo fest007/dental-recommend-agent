@@ -40,11 +40,19 @@ try {
     Write-Step "Occupying port $OccupiedPort ..."
     $pyCode = "import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,0);s.bind(('127.0.0.1',$OccupiedPort));s.listen(1);time.sleep(300)"
     $BlockerProc = Start-Process -FilePath "python" -ArgumentList "-c",$pyCode -PassThru -WindowStyle Hidden
-    Start-Sleep -Seconds 2
 
-    $tcp = New-Object System.Net.Sockets.TcpClient
-    try { $tcp.Connect("127.0.0.1", $OccupiedPort) } catch { Write-Fail "Port $OccupiedPort not occupied" }
-    finally { $tcp.Close() }
+    $portReady = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Milliseconds 500
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $tcp.Connect("127.0.0.1", $OccupiedPort)
+            $tcp.Close()
+            $portReady = $true
+            break
+        } catch { }
+    }
+    if (-not $portReady) { Write-Fail "Port $OccupiedPort not occupied after 7s" }
     Write-Ok "Port $OccupiedPort occupied (PID $($BlockerProc.Id))"
 
     # 2. Start backend
