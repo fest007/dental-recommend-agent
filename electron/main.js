@@ -113,7 +113,7 @@ qdrant:
 }
 
 function getBackendURL() {
-  return `http://localhost:${backendPort}`;
+  return `http://127.0.0.1:${backendPort}`;
 }
 
 function getPortFilePath() {
@@ -328,7 +328,7 @@ function startHealthCheck() {
   const maxWait = 60000; // 60 秒超时
 
   function currentEndpoint() {
-    return `http://localhost:${backendPort}/api/health`;
+    return `http://127.0.0.1:${backendPort}/api/health`;
   }
 
   console.log(`[main] Starting health check, waiting for port.json from backend`);
