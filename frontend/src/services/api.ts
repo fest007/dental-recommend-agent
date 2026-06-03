@@ -26,7 +26,7 @@ async function getBaseURL(): Promise<string> {
   // 浏览器开发环境，使用相对路径（由 Vite proxy 处理）
   if (window.location.protocol === 'file:') {
     // file:// 协议下，使用默认端口
-    _backendURL = 'http://localhost:8765/api'
+    _backendURL = 'http://127.0.0.1:8765/api'
   } else {
     _backendURL = '/api'
   }

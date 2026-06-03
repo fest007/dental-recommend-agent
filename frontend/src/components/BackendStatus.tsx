@@ -30,7 +30,7 @@ async function getBackendURL(): Promise<string> {
     // ignore
   }
   if (window.location.protocol === 'file:') {
-    return 'http://localhost:8765'
+    return 'http://127.0.0.1:8765'
   }
   return ''
 }
