@@ -3,19 +3,45 @@ import axios, { type AxiosResponse } from 'axios'
 // ---------------------------------------------------------------------------
 // API Base URL - 根据环境自动切换
 // ---------------------------------------------------------------------------
-function getBaseURL(): string {
-  // Electron 环境中，直接请求本地后端
-  if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
-    return 'http://localhost:8765/api'
+let _backendURL: string | null = null
+
+async function getBaseURL(): Promise<string> {
+  // 如果已经缓存，直接返回
+  if (_backendURL) {
+    return _backendURL
   }
+
+  // Electron 环境中，从主进程获取后端 URL
+  const electronAPI = (window as any).electronAPI
+  if (electronAPI) {
+    try {
+      const url = await electronAPI.getBackendURL()
+      _backendURL = `${url}/api`
+      return _backendURL
+    } catch (err) {
+      console.error('Failed to get backend URL from Electron:', err)
+    }
+  }
+
   // 浏览器开发环境，使用相对路径（由 Vite proxy 处理）
-  return '/api'
+  if (window.location.protocol === 'file:') {
+    // file:// 协议下，使用默认端口
+    _backendURL = 'http://localhost:8765/api'
+  } else {
+    _backendURL = '/api'
+  }
+  return _backendURL
 }
 
-// ---------------------------------------------------------------------------
-// Axios instance
-// ---------------------------------------------------------------------------
-const api = axios.create({ baseURL: getBaseURL() })
+// 创建 axios 实例，使用默认值（会在请求时动态更新）
+const api = axios.create({ baseURL: '/api' })
+
+// 请求拦截器：动态更新 baseURL
+api.interceptors.request.use(async (config) => {
+  const baseURL = await getBaseURL()
+  config.baseURL = baseURL
+  return config
+})
 
 // ---------------------------------------------------------------------------
 // Common types
@@ -289,42 +315,47 @@ export function enrichProductsStream(
 ): () => void {
   const controller = new AbortController()
 
-  fetch(`${api.defaults.baseURL}/products/enrich-stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-    signal: controller.signal,
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const reader = response.body?.getReader()
-      if (!reader) return
-      const decoder = new TextDecoder()
-      let buffer = ''
+  // 获取后端 URL（异步）
+  getBaseURL().then(baseURL => {
+    const streamURL = baseURL.replace('/api', '') + '/api/products/enrich-stream'
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (trimmed) {
-            try {
-              onEvent(JSON.parse(trimmed))
-            } catch { /* skip malformed lines */ }
+    fetch(streamURL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        const reader = response.body?.getReader()
+        if (!reader) return
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (trimmed) {
+              try {
+                onEvent(JSON.parse(trimmed))
+              } catch { /* skip malformed lines */ }
+            }
           }
         }
-      }
-    })
-    .catch((err) => {
-      if (err.name !== 'AbortError') {
-        onError?.(err)
-      }
-    })
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          onError?.(err)
+        }
+      })
+  })
 
   return () => controller.abort()
 }
@@ -561,44 +592,48 @@ export function sendMessageStream(
 ): () => void {
   const controller = new AbortController()
 
-  fetch(`${api.defaults.baseURL}/chat/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, thread_id: thread_id || undefined }),
-    signal: controller.signal,
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const reader = response.body?.getReader()
-      if (!reader) return
-      const decoder = new TextDecoder()
-      let buffer = ''
+  getBaseURL().then(baseURL => {
+    const streamURL = baseURL.replace('/api', '') + '/api/chat/stream'
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (trimmed.startsWith('data: ')) {
-            const data = trimmed.slice(6)
-            if (data === '[DONE]') return
-            try {
-              onEvent(JSON.parse(data))
-            } catch { /* skip malformed lines */ }
+    fetch(streamURL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, thread_id: thread_id || undefined }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        const reader = response.body?.getReader()
+        if (!reader) return
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (trimmed.startsWith('data: ')) {
+              const data = trimmed.slice(6)
+              if (data === '[DONE]') return
+              try {
+                onEvent(JSON.parse(data))
+              } catch { /* skip malformed lines */ }
+            }
           }
         }
-      }
-    })
-    .catch((err) => {
-      if (err.name !== 'AbortError') {
-        onError?.(err)
-      }
-    })
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          onError?.(err)
+        }
+      })
+  })
 
   return () => controller.abort()
 }
@@ -611,44 +646,48 @@ export function resumeChatStream(
 ): () => void {
   const controller = new AbortController()
 
-  fetch(`${api.defaults.baseURL}/chat/resume-stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ thread_id, approved }),
-    signal: controller.signal,
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const reader = response.body?.getReader()
-      if (!reader) return
-      const decoder = new TextDecoder()
-      let buffer = ''
+  getBaseURL().then(baseURL => {
+    const streamURL = baseURL.replace('/api', '') + '/api/chat/resume-stream'
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (trimmed.startsWith('data: ')) {
-            const data = trimmed.slice(6)
-            if (data === '[DONE]') return
-            try {
-              onEvent(JSON.parse(data))
-            } catch { /* skip malformed lines */ }
+    fetch(streamURL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id, approved }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        const reader = response.body?.getReader()
+        if (!reader) return
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (trimmed.startsWith('data: ')) {
+              const data = trimmed.slice(6)
+              if (data === '[DONE]') return
+              try {
+                onEvent(JSON.parse(data))
+              } catch { /* skip malformed lines */ }
+            }
           }
         }
-      }
-    })
-    .catch((err) => {
-      if (err.name !== 'AbortError') {
-        onError?.(err)
-      }
-    })
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          onError?.(err)
+        }
+      })
+  })
 
   return () => controller.abort()
 }

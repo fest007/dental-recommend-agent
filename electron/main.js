@@ -1,19 +1,16 @@
-const { app, BrowserWindow, session, dialog } = require('electron');
+const { app, BrowserWindow, session, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
+const yaml = require('js-yaml');
 
 let mainWindow = null;
 let pythonProcess = null;
 let backendReady = false;
+let backendPort = 8765; // 默认端口，会从配置文件更新
 
 const isDev = !app.isPackaged;
-const BACKEND_PORT = 8765;
-const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
-const HEALTH_ENDPOINT = `${BACKEND_URL}/api/health`;
-const HEALTH_POLL_INTERVAL = 300;
-const HEALTH_POLL_TIMEOUT = 30000;
 
 // ---------------------------------------------------------------------------
 // Content-Security-Policy
@@ -57,12 +54,19 @@ function getPythonExecutable() {
   return path.join(backendDir, `backend${ext}`);
 }
 
-function initConfig() {
-  const dataDir = getBackendDataDir();
-  const configPath = path.join(dataDir, 'config.yaml');
+function getConfigPath() {
+  return path.join(getBackendDataDir(), 'config.yaml');
+}
+
+// ---------------------------------------------------------------------------
+// 配置文件管理
+// ---------------------------------------------------------------------------
+function loadConfig() {
+  const configPath = getConfigPath();
   const sourceDir = getBackendSourceDir();
   const examplePath = path.join(sourceDir, 'config.yaml.example');
 
+  // 如果配置文件不存在，创建默认配置
   if (!fs.existsSync(configPath)) {
     if (fs.existsSync(examplePath)) {
       console.log('[main] Creating config.yaml from example...');
@@ -81,7 +85,7 @@ function initConfig() {
 
 server:
   host: "127.0.0.1"
-  port: ${BACKEND_PORT}
+  port: 8765
 
 database:
   path: "app.db"
@@ -93,16 +97,57 @@ qdrant:
       fs.writeFileSync(configPath, defaultConfig);
     }
   }
+
+  // 读取配置
+  try {
+    const configContent = fs.readFileSync(configPath, 'utf8');
+    const config = yaml.load(configContent);
+    return config || {};
+  } catch (err) {
+    console.error('[main] Failed to load config:', err);
+    return {};
+  }
 }
 
+function getBackendPort() {
+  const config = loadConfig();
+  return config?.server?.port || 8765;
+}
+
+function getBackendURL() {
+  return `http://localhost:${backendPort}`;
+}
+
+// ---------------------------------------------------------------------------
+// IPC handlers
+// ---------------------------------------------------------------------------
+function setupIPC() {
+  // 前端请求获取后端 URL
+  ipcMain.handle('get-backend-url', () => {
+    return getBackendURL();
+  });
+
+  // 前端请求获取后端端口
+  ipcMain.handle('get-backend-port', () => {
+    return backendPort;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 后端进程管理
+// ---------------------------------------------------------------------------
 function startPythonBackend() {
   const executable = getPythonExecutable();
   const sourceDir = getBackendSourceDir();
   const dataDir = getBackendDataDir();
 
+  // 从配置文件读取端口
+  backendPort = getBackendPort();
+
   console.log(`[main] Starting backend: ${executable}`);
   console.log(`[main] Source dir: ${sourceDir}`);
   console.log(`[main] Data dir: ${dataDir}`);
+  console.log(`[main] Backend port: ${backendPort}`);
 
   const options = {
     cwd: sourceDir,
@@ -172,16 +217,20 @@ function killPythonBackend() {
 // ---------------------------------------------------------------------------
 function pollHealthInBackground() {
   const startTime = Date.now();
+  const healthEndpoint = `http://localhost:${backendPort}/api/health`;
 
   function check() {
     if (backendReady) return;
 
-    const req = http.get(HEALTH_ENDPOINT, (res) => {
+    const req = http.get(healthEndpoint, (res) => {
       if (res.statusCode === 200) {
         console.log('[main] Backend health check passed.');
         backendReady = true;
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-ready');
+          mainWindow.webContents.send('backend-ready', {
+            port: backendPort,
+            url: getBackendURL(),
+          });
         }
       } else {
         retry();
@@ -197,14 +246,14 @@ function pollHealthInBackground() {
   }
 
   function retry() {
-    if (Date.now() - startTime > HEALTH_POLL_TIMEOUT) {
+    if (Date.now() - startTime > 30000) {
       console.error('[main] Backend health check timed out');
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('backend-error', '后端服务启动超时');
       }
       return;
     }
-    setTimeout(check, HEALTH_POLL_INTERVAL);
+    setTimeout(check, 300);
   }
 
   check();
@@ -270,7 +319,12 @@ if (!gotTheLock) {
   // ---------------------------------------------------------------------------
   app.whenReady().then(async () => {
     setDefaultCSP();
-    initConfig();
+    setupIPC();
+
+    // 读取配置获取端口
+    backendPort = getBackendPort();
+    console.log(`[main] Using backend port: ${backendPort}`);
+
     createWindow();
     startPythonBackend();
     pollHealthInBackground();

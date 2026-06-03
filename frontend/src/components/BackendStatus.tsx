@@ -5,9 +5,18 @@ import { LoadingOutlined, ReloadOutlined } from '@ant-design/icons'
 const { Text } = Typography
 
 // 获取后端 URL
-const getBackendURL = (): string => {
-  // Electron 环境中，直接请求本地后端
-  if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+async function getBackendURL(): Promise<string> {
+  // Electron 环境中，从主进程获取
+  const electronAPI = (window as any).electronAPI
+  if (electronAPI) {
+    try {
+      return await electronAPI.getBackendURL()
+    } catch (err) {
+      console.error('Failed to get backend URL:', err)
+    }
+  }
+  // 浏览器环境
+  if (window.location.protocol === 'file:') {
     return 'http://localhost:8765'
   }
   return ''
@@ -16,7 +25,8 @@ const getBackendURL = (): string => {
 // 后端健康检查
 const checkBackendHealth = async (): Promise<boolean> => {
   try {
-    const res = await fetch(`${getBackendURL()}/api/health`, {
+    const baseURL = await getBackendURL()
+    const res = await fetch(`${baseURL}/api/health`, {
       method: 'GET',
       signal: AbortSignal.timeout(2000),
     })
@@ -40,7 +50,7 @@ export default function BackendStatus({ children }: BackendStatusProps) {
     setIsChecking(true)
     setError(null)
 
-    const maxRetries = 30 // 最多检查 30 次（约 15 秒）
+    const maxRetries = 30
     let count = 0
 
     while (count < maxRetries) {
@@ -61,10 +71,11 @@ export default function BackendStatus({ children }: BackendStatusProps) {
   useEffect(() => {
     checkStatus()
 
-    // 监听 Electron 通知（如果在 Electron 环境中）
+    // 监听 Electron 通知
     const electronAPI = (window as any).electronAPI
     if (electronAPI) {
-      electronAPI.onBackendReady(() => {
+      electronAPI.onBackendReady((data: { port: number; url: string }) => {
+        console.log('[BackendStatus] Backend ready:', data)
         setIsReady(true)
         setIsChecking(false)
       })
