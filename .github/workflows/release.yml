@@ -60,14 +60,16 @@ jobs:
       - name: Smoke test backend
         run: |
           cd backend/dist/backend
-          # 启动后端，等待 5 秒后检查是否还在运行
-          timeout 10 ./backend &
+          # 启动后端
+          ./backend &
           BACKEND_PID=$!
+          # 等待 5 秒
           sleep 5
           # 检查进程是否还在
           if kill -0 $BACKEND_PID 2>/dev/null; then
             echo "✅ Backend smoke test passed"
             kill $BACKEND_PID
+            wait $BACKEND_PID 2>/dev/null
           else
             echo "❌ Backend smoke test failed - process exited unexpectedly"
             wait $BACKEND_PID

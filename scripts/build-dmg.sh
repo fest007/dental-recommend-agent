@@ -60,12 +60,13 @@ print_success "后端打包完成"
 # Smoke test
 print_step "3/4" "验证后端可执行文件..."
 cd backend/dist/backend
-timeout 10 ./backend &
+./backend &
 BACKEND_PID=$!
 sleep 5
 if kill -0 $BACKEND_PID 2>/dev/null; then
     print_success "后端 smoke test 通过"
     kill $BACKEND_PID
+    wait $BACKEND_PID 2>/dev/null
 else
     print_error "后端 smoke test 失败 - 进程异常退出"
 fi
