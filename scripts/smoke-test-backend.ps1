@@ -22,8 +22,8 @@ if (-not (Test-Path $BackendBin)) {
 $TmpDir = Join-Path $env:TEMP "smoke-backend-$(Get-Random)"
 New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
 
-$BackendProc    = $null
-$BlockerProc    = $null
+$BackendProc = $null
+$BlockerProc = $null
 
 function Cleanup {
     if ($BackendProc -and -not $BackendProc.HasExited) {
@@ -36,10 +36,21 @@ function Cleanup {
 }
 
 try {
-    # 1. Occupy the preferred port
+    # 1. Occupy the preferred port via temp .py file (avoids quoting issues)
     Write-Step "Occupying port $OccupiedPort ..."
-    $pyCode = "import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,0);s.bind(('127.0.0.1',$OccupiedPort));s.listen(1);time.sleep(300)"
-    $BlockerProc = Start-Process -FilePath "python" -ArgumentList "-c",$pyCode -PassThru -WindowStyle Hidden
+    $blockerPy = Join-Path $TmpDir "blocker.py"
+    $pyLines = @(
+        "import socket, time, sys",
+        "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)",
+        "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)",
+        "s.bind(('127.0.0.1', $OccupiedPort))",
+        "s.listen(1)",
+        "sys.stdout.flush()",
+        "time.sleep(300)"
+    )
+    $pyLines | Out-File -FilePath $blockerPy -Encoding utf8
+
+    $BlockerProc = Start-Process -FilePath "python" -ArgumentList $blockerPy -PassThru -WindowStyle Hidden -RedirectStandardOutput "$TmpDir\blocker.out"
 
     $portReady = $false
     for ($i = 0; $i -lt 15; $i++) {
