@@ -82,10 +82,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "electron/icon.ico",
-      "arch": [
-        "x64"
-      ]
+      "icon": "electron/icon.ico"
     },
     "nsis": {
       "oneClick": false,
