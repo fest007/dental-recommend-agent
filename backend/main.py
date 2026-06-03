@@ -187,9 +187,10 @@ qdrant:
     print(f"[main] Starting server on {host}:{port}")
     print(f"[main] Data directory: {config_dir}")
 
+    # 直接传递 app 对象，避免 PyInstaller 打包后模块导入问题
     uvicorn.run(
-        "main:app",
+        app,
         host=host,
         port=port,
-        reload=is_dev,
+        log_level="info",
     )

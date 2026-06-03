@@ -11,6 +11,7 @@ let backendReady = false;
 let backendPort = 8765;
 let startupStatus = 'initializing';
 let healthCheckTimer = null;
+let backendLogFile = null;
 
 const isDev = !app.isPackaged;
 
@@ -193,6 +194,15 @@ function startPythonBackend() {
   const sourceDir = getBackendSourceDir();
   const dataDir = getBackendDataDir();
 
+  // 创建日志文件
+  const logDir = path.join(dataDir, 'logs');
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  const logPath = path.join(logDir, 'backend.log');
+  backendLogFile = fs.openSync(logPath, 'a');
+  console.log(`[main] Backend log file: ${logPath}`);
+
   console.log(`[main] Starting backend: ${executable}`);
   console.log(`[main] Source dir: ${sourceDir}`);
   console.log(`[main] Data dir: ${dataDir}`);
@@ -214,6 +224,10 @@ function startPythonBackend() {
   pythonProcess.stdout.on('data', (data) => {
     const msg = data.toString().trim();
     console.log(`[backend:stdout] ${msg}`);
+    // 写入日志文件
+    if (backendLogFile) {
+      fs.writeSync(backendLogFile, `[stdout] ${msg}\n`);
+    }
     if (msg.includes('Starting server')) {
       startupStatus = 'starting_server';
       notifyStartupStatus();
@@ -223,6 +237,10 @@ function startPythonBackend() {
   pythonProcess.stderr.on('data', (data) => {
     const msg = data.toString().trim();
     console.error(`[backend:stderr] ${msg}`);
+    // 写入日志文件
+    if (backendLogFile) {
+      fs.writeSync(backendLogFile, `[stderr] ${msg}\n`);
+    }
     // 检测到错误输出时，通知前端
     if (msg.includes('Error') || msg.includes('error') || msg.includes('Traceback')) {
       startupStatus = 'error';
@@ -232,6 +250,9 @@ function startPythonBackend() {
 
   pythonProcess.on('error', (err) => {
     console.error('[main] Failed to start backend process:', err);
+    if (backendLogFile) {
+      fs.writeSync(backendLogFile, `[spawn error] ${err.message}\n`);
+    }
     startupStatus = 'error';
     notifyStartupStatus();
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -242,16 +263,32 @@ function startPythonBackend() {
   // 关键：后端进程退出时立即通知
   pythonProcess.on('exit', (code, signal) => {
     console.log(`[main] Backend exited with code ${code}, signal ${signal}`);
-    const prevProcess = pythonProcess;
+    if (backendLogFile) {
+      fs.writeSync(backendLogFile, `[exit] code=${code} signal=${signal}\n`);
+      fs.closeSync(backendLogFile);
+      backendLogFile = null;
+    }
     pythonProcess = null;
     backendReady = false;
 
-    // 如果不是正常退出，通知前端
+    // 如果不是正常退出，通知前端并读取日志
     if (code !== 0 && code !== null) {
       startupStatus = 'crashed';
       notifyStartupStatus();
+
+      // 读取最后几行日志作为错误信息
+      let errorMsg = `Backend crashed with exit code ${code}`;
+      try {
+        const logContent = fs.readFileSync(logPath, 'utf-8');
+        const lines = logContent.split('\n').filter(l => l.trim());
+        const lastLines = lines.slice(-10).join('\n');
+        if (lastLines) {
+          errorMsg = `Backend crashed (exit code ${code}):\n${lastLines}`;
+        }
+      } catch {}
+
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('backend-error', `Backend crashed with exit code ${code}`);
+        mainWindow.webContents.send('backend-error', errorMsg);
       }
     }
   });
