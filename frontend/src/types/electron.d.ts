@@ -1,0 +1,13 @@
+interface ElectronAPI {
+  getBackendURL: () => Promise<string>
+  getBackendPort: () => Promise<number>
+  getStartupStatus: () => Promise<string>
+  onBackendReady: (callback: (data: { port: number; url: string }) => void) => void
+  onBackendError: (callback: (message: string) => void) => void
+  onStartupStatus: (callback: (data: { status: string; port?: number }) => void) => void
+  removeAllListeners: (channel: string) => void
+}
+
+interface Window {
+  electronAPI?: ElectronAPI
+}

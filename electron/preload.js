@@ -1,20 +1,24 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// 暴露后端状态给前端
+// 暴露安全的 API 给前端
 contextBridge.exposeInMainWorld('electronAPI', {
-  // 获取后端 URL
+  // 后端相关
   getBackendURL: () => ipcRenderer.invoke('get-backend-url'),
-  // 获取后端端口
   getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
-  // 监听后端就绪事件
+  getStartupStatus: () => ipcRenderer.invoke('get-startup-status'),
+
+  // 监听事件
   onBackendReady: (callback) => {
     ipcRenderer.on('backend-ready', (event, data) => callback(data));
   },
-  // 监听后端错误事件
   onBackendError: (callback) => {
     ipcRenderer.on('backend-error', (event, message) => callback(message));
   },
-  // 移除监听器
+  onStartupStatus: (callback) => {
+    ipcRenderer.on('startup-status', (event, data) => callback(data));
+  },
+
+  // 清理监听器
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
   },

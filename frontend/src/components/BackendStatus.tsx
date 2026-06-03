@@ -18,19 +18,20 @@ const STATUS_MESSAGES: Record<string, { text: string; percent: number }> = {
   'error': { text: 'Startup error', percent: 100 },
 }
 
-// 获取后端 URL
+// 获取后端 URL（从 Electron 或默认）
 async function getBackendURL(): Promise<string> {
-  // Electron 环境中，从主进程获取
   try {
-    const { ipcRenderer } = window.require('electron')
-    return await ipcRenderer.invoke('get-backend-url')
-  } catch {
-    // 浏览器环境
-    if (window.location.protocol === 'file:') {
-      return 'http://localhost:8765'
+    if (window.electronAPI) {
+      return await window.electronAPI.getBackendURL()
     }
-    return ''
+  } catch {
+    // ignore
   }
+  // 浏览器环境默认
+  if (window.location.protocol === 'file:') {
+    return 'http://localhost:8765'
+  }
+  return ''
 }
 
 // 后端健康检查
@@ -70,7 +71,7 @@ export default function BackendStatus({ children }: BackendStatusProps) {
   const checkStatus = useCallback(async () => {
     setError(null)
 
-    const maxRetries = 60 // 最多检查 60 次（约 30 秒）
+    const maxRetries = 60
     let count = 0
 
     while (count < maxRetries) {
@@ -84,38 +85,36 @@ export default function BackendStatus({ children }: BackendStatusProps) {
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
 
-    setError('Backend startup timeout. Please check if port is in use.')
+    setError('Backend service failed to start.')
   }, [])
 
   useEffect(() => {
     // 监听 Electron 启动状态
-    try {
-      const { ipcRenderer } = window.require('electron')
-
-      ipcRenderer.on('startup-status', (event: any, data: StartupStatus) => {
+    if (window.electronAPI) {
+      window.electronAPI.onStartupStatus((data: StartupStatus) => {
         setStartupStatus(data)
       })
 
-      ipcRenderer.on('backend-ready', (event: any, data: { port: number; url: string }) => {
+      window.electronAPI.onBackendReady((data: { port: number; url: string }) => {
         console.log('[BackendStatus] Backend ready:', data)
         setIsReady(true)
       })
 
-      ipcRenderer.on('backend-error', (event: any, message: string) => {
+      window.electronAPI.onBackendError((message: string) => {
         setError(message)
       })
 
       // 获取初始状态
-      ipcRenderer.invoke('get-startup-status').then((status: string) => {
+      window.electronAPI.getStartupStatus().then((status: string) => {
         setStartupStatus({ status })
       })
 
       return () => {
-        ipcRenderer.removeAllListeners('startup-status')
-        ipcRenderer.removeAllListeners('backend-ready')
-        ipcRenderer.removeAllListeners('backend-error')
+        window.electronAPI?.removeAllListeners('startup-status')
+        window.electronAPI?.removeAllListeners('backend-ready')
+        window.electronAPI?.removeAllListeners('backend-error')
       }
-    } catch {
+    } else {
       // 浏览器环境，使用轮询
       checkStatus()
     }
@@ -200,9 +199,11 @@ export default function BackendStatus({ children }: BackendStatusProps) {
               color: 'rgba(255,255,255,0.7)',
               fontSize: 12,
               marginBottom: 16,
+              textAlign: 'center',
+              maxWidth: 300,
             }}
           >
-            Please check if another instance is running or port 8765 is in use.
+            The backend service failed to start. This could be due to a port conflict or another instance running.
           </Text>
           <Button
             icon={<ReloadOutlined />}

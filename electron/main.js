@@ -113,11 +113,25 @@ qdrant:
 }
 
 // ---------------------------------------------------------------------------
-// 读取后端端口信息
+// 清理旧的端口文件
 // ---------------------------------------------------------------------------
-function readBackendPort() {
+function cleanupPortFile() {
   const portInfoPath = getPortInfoPath();
-  const maxWait = 15000; // 最多等待 15 秒
+  if (fs.existsSync(portInfoPath)) {
+    try {
+      fs.unlinkSync(portInfoPath);
+      console.log('[main] Cleaned up old port.json');
+    } catch (err) {
+      console.error('[main] Failed to cleanup port.json:', err);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 读取后端端口信息（异步，不阻塞主进程）
+// ---------------------------------------------------------------------------
+async function readBackendPortWithRetry(maxWait = 15000) {
+  const portInfoPath = getPortInfoPath();
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWait) {
@@ -131,13 +145,14 @@ function readBackendPort() {
         console.error('[main] Failed to read port info:', err);
       }
     }
-    // 文件可能还没写入，等待一下
-    require('child_process').execSync('sleep 0.2', { stdio: 'ignore' });
+    // 使用 setTimeout 等待，不阻塞主进程
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
-  // 超时，使用默认端口
-  console.warn('[main] Timeout reading port info, using default port');
-  return 8765;
+  // 超时，使用配置文件中的端口
+  console.warn('[main] Timeout reading port info, using config port');
+  const config = loadConfig();
+  return config?.server?.port || 8765;
 }
 
 function getBackendURL() {
@@ -190,7 +205,6 @@ function startPythonBackend() {
   pythonProcess.stdout.on('data', (data) => {
     const msg = data.toString().trim();
     console.log(`[backend:stdout] ${msg}`);
-    // 解析启动状态
     if (msg.includes('Starting server')) {
       startupStatus = 'starting_server';
       notifyStartupStatus();
@@ -264,9 +278,8 @@ function pollHealthInBackground() {
   startupStatus = 'waiting_backend';
   notifyStartupStatus();
 
-  // 先读取后端实际端口
-  setTimeout(() => {
-    const port = readBackendPort();
+  // 异步读取后端端口
+  readBackendPortWithRetry().then(port => {
     if (port !== backendPort) {
       console.log(`[main] Backend using port ${port} instead of ${backendPort}`);
       backendPort = port;
@@ -316,11 +329,11 @@ function pollHealthInBackground() {
     }
 
     check();
-  }, 1000); // 等待 1 秒让后端写入端口文件
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Loading HTML with progress
+// Loading HTML with progress (使用 preload 桥接)
 // ---------------------------------------------------------------------------
 function getLoadingHTML() {
   return `<!DOCTYPE html>
@@ -400,19 +413,21 @@ function getLoadingHTML() {
     <div class="status" id="status">Starting services...</div>
   </div>
   <script>
-    const { ipcRenderer } = require('electron');
-    ipcRenderer.on('startup-status', (event, data) => {
-      const statusEl = document.getElementById('status');
-      const messages = {
-        'initializing': 'Initializing...',
-        'starting_server': 'Starting backend server...',
-        'waiting_backend': 'Waiting for backend to be ready...',
-        'ready': 'Ready!',
-        'timeout': 'Startup timeout',
-        'error': 'Startup error'
-      };
-      statusEl.textContent = messages[data.status] || data.status;
-    });
+    // 使用 preload 暴露的 API
+    if (window.electronAPI) {
+      window.electronAPI.onStartupStatus((data) => {
+        const statusEl = document.getElementById('status');
+        const messages = {
+          'initializing': 'Initializing...',
+          'starting_server': 'Starting backend server...',
+          'waiting_backend': 'Waiting for backend to be ready...',
+          'ready': 'Ready!',
+          'timeout': 'Startup timeout',
+          'error': 'Startup error'
+        };
+        statusEl.textContent = messages[data.status] || data.status;
+      });
+    }
   </script>
 </body>
 </html>`;
@@ -428,8 +443,9 @@ function createWindow() {
     title: 'Dental Agent',
     show: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
@@ -483,6 +499,9 @@ if (!gotTheLock) {
     setDefaultCSP();
     setupIPC();
 
+    // 清理旧的端口文件
+    cleanupPortFile();
+
     // 读取配置获取端口
     const config = loadConfig();
     backendPort = config?.server?.port || 8765;
@@ -524,6 +543,7 @@ if (!gotTheLock) {
 
   app.on('before-quit', () => {
     killPythonBackend();
+    cleanupPortFile();
   });
 
   app.on('quit', () => {
