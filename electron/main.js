@@ -12,6 +12,8 @@ let backendPort = 8765;
 let startupStatus = 'initializing';
 let healthCheckTimer = null;
 let backendLogFile = null;
+let backendExited = false;
+let backendExitCode = null;
 
 const isDev = !app.isPackaged;
 
@@ -59,10 +61,6 @@ function getPythonExecutable() {
 
 function getConfigPath() {
   return path.join(getBackendDataDir(), 'config.yaml');
-}
-
-function getPortInfoPath() {
-  return path.join(getBackendDataDir(), 'port.json');
 }
 
 // ---------------------------------------------------------------------------
@@ -114,47 +112,6 @@ qdrant:
   }
 }
 
-// ---------------------------------------------------------------------------
-// 清理旧的端口文件
-// ---------------------------------------------------------------------------
-function cleanupPortFile() {
-  const portInfoPath = getPortInfoPath();
-  if (fs.existsSync(portInfoPath)) {
-    try {
-      fs.unlinkSync(portInfoPath);
-      console.log('[main] Cleaned up old port.json');
-    } catch (err) {
-      console.error('[main] Failed to cleanup port.json:', err);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 读取后端端口信息（异步）
-// ---------------------------------------------------------------------------
-async function readBackendPortWithRetry(maxWait = 15000) {
-  const portInfoPath = getPortInfoPath();
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < maxWait) {
-    if (fs.existsSync(portInfoPath)) {
-      try {
-        const content = fs.readFileSync(portInfoPath, 'utf-8');
-        const portInfo = JSON.parse(content);
-        console.log('[main] Read port info:', portInfo);
-        return portInfo.port;
-      } catch (err) {
-        console.error('[main] Failed to read port info:', err);
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, 200));
-  }
-
-  console.warn('[main] Timeout reading port info, using config port');
-  const config = loadConfig();
-  return config?.server?.port || 8765;
-}
-
 function getBackendURL() {
   return `http://localhost:${backendPort}`;
 }
@@ -175,12 +132,13 @@ function setupIPC() {
     return startupStatus;
   });
 
-  // 重启后端
   ipcMain.handle('restart-backend', async () => {
     console.log('[main] Restarting backend...');
     killPythonBackend();
-    cleanupPortFile();
     await new Promise(resolve => setTimeout(resolve, 500));
+    backendExited = false;
+    backendExitCode = null;
+    backendReady = false;
     startBackendWithHealthCheck();
     return { status: 'restarting' };
   });
@@ -220,15 +178,16 @@ function startPythonBackend() {
   };
 
   pythonProcess = spawn(executable, [], options);
+  backendExited = false;
+  backendExitCode = null;
 
   pythonProcess.stdout.on('data', (data) => {
     const msg = data.toString().trim();
     console.log(`[backend:stdout] ${msg}`);
-    // 写入日志文件
     if (backendLogFile) {
       fs.writeSync(backendLogFile, `[stdout] ${msg}\n`);
     }
-    if (msg.includes('Starting server')) {
+    if (msg.includes('Starting server') || msg.includes('Uvicorn running')) {
       startupStatus = 'starting_server';
       notifyStartupStatus();
     }
@@ -237,14 +196,8 @@ function startPythonBackend() {
   pythonProcess.stderr.on('data', (data) => {
     const msg = data.toString().trim();
     console.error(`[backend:stderr] ${msg}`);
-    // 写入日志文件
     if (backendLogFile) {
       fs.writeSync(backendLogFile, `[stderr] ${msg}\n`);
-    }
-    // 检测到错误输出时，通知前端
-    if (msg.includes('Error') || msg.includes('error') || msg.includes('Traceback')) {
-      startupStatus = 'error';
-      notifyStartupStatus();
     }
   });
 
@@ -260,9 +213,10 @@ function startPythonBackend() {
     }
   });
 
-  // 关键：后端进程退出时立即通知
   pythonProcess.on('exit', (code, signal) => {
     console.log(`[main] Backend exited with code ${code}, signal ${signal}`);
+    backendExited = true;
+    backendExitCode = code;
     if (backendLogFile) {
       fs.writeSync(backendLogFile, `[exit] code=${code} signal=${signal}\n`);
       fs.closeSync(backendLogFile);
@@ -271,14 +225,14 @@ function startPythonBackend() {
     pythonProcess = null;
     backendReady = false;
 
-    // 如果不是正常退出，通知前端并读取日志
-    if (code !== 0 && code !== null) {
+    // 如果不是正常退出且还没 ready，通知前端
+    if (code !== 0 && code !== null && startupStatus !== 'ready') {
       startupStatus = 'crashed';
       notifyStartupStatus();
 
-      // 读取最后几行日志作为错误信息
       let errorMsg = `Backend crashed with exit code ${code}`;
       try {
+        const logPath = path.join(logDir, 'backend.log');
         const logContent = fs.readFileSync(logPath, 'utf-8');
         const lines = logContent.split('\n').filter(l => l.trim());
         const lastLines = lines.slice(-10).join('\n');
@@ -337,18 +291,86 @@ function notifyStartupStatus() {
 }
 
 // ---------------------------------------------------------------------------
-// 启动后端 + 健康检查（完整流程）
+// 健康检查
+// ---------------------------------------------------------------------------
+function startHealthCheck() {
+  const healthEndpoint = `http://localhost:${backendPort}/api/health`;
+  const startTime = Date.now();
+  const maxWait = 60000; // 60 秒超时
+
+  console.log(`[main] Starting health check on ${healthEndpoint}`);
+
+  function check() {
+    // 如果后端已经退出，停止检查
+    if (backendExited) {
+      console.log('[main] Backend exited, stopping health check');
+      return;
+    }
+
+    if (backendReady) return;
+
+    const req = http.get(healthEndpoint, (res) => {
+      if (res.statusCode === 200) {
+        console.log('[main] Backend health check passed!');
+        backendReady = true;
+        startupStatus = 'ready';
+        notifyStartupStatus();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('backend-ready', {
+            port: backendPort,
+            url: getBackendURL(),
+          });
+        }
+      } else {
+        scheduleRetry();
+      }
+      res.resume();
+    });
+
+    req.on('error', (err) => {
+      console.log(`[main] Health check error: ${err.message}`);
+      scheduleRetry();
+    });
+
+    req.setTimeout(3000, () => {
+      req.destroy();
+      scheduleRetry();
+    });
+  }
+
+  function scheduleRetry() {
+    if (backendExited) {
+      console.log('[main] Backend exited, stopping health check retries');
+      return;
+    }
+
+    if (Date.now() - startTime > maxWait) {
+      console.error('[main] Health check timed out');
+      startupStatus = 'timeout';
+      notifyStartupStatus();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend-error', 'Backend startup timeout');
+      }
+      return;
+    }
+
+    healthCheckTimer = setTimeout(check, 500);
+  }
+
+  // 开始第一次检查
+  check();
+}
+
+// ---------------------------------------------------------------------------
+// 启动后端 + 健康检查
 // ---------------------------------------------------------------------------
 function startBackendWithHealthCheck() {
   const config = loadConfig();
   backendPort = config?.server?.port || 8765;
-  console.log(`[main] Config port: ${backendPort}`);
+  console.log(`[main] Using port: ${backendPort}`);
 
   startupStatus = 'initializing';
   notifyStartupStatus();
-
-  // 清理旧端口文件
-  cleanupPortFile();
 
   // 启动后端
   startPythonBackend();
@@ -357,75 +379,11 @@ function startBackendWithHealthCheck() {
   startupStatus = 'waiting_backend';
   notifyStartupStatus();
 
-  // 异步读取端口并开始健康检查
-  readBackendPortWithRetry().then(port => {
-    if (port !== backendPort) {
-      console.log(`[main] Backend using port ${port} instead of ${backendPort}`);
-      backendPort = port;
-    }
-
-    const healthEndpoint = `http://localhost:${backendPort}/api/health`;
-    const startTime = Date.now();
-
-    function check() {
-      // 如果后端已经退出，停止检查
-      if (!pythonProcess) {
-        console.log('[main] Backend process gone, stopping health check');
-        return;
-      }
-
-      if (backendReady) return;
-
-      const req = http.get(healthEndpoint, (res) => {
-        if (res.statusCode === 200) {
-          console.log('[main] Backend health check passed.');
-          backendReady = true;
-          startupStatus = 'ready';
-          notifyStartupStatus();
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('backend-ready', {
-              port: backendPort,
-              url: getBackendURL(),
-            });
-          }
-        } else {
-          retry();
-        }
-        res.resume();
-      });
-
-      req.on('error', () => retry());
-      req.setTimeout(2000, () => {
-        req.destroy();
-        retry();
-      });
-    }
-
-    function retry() {
-      // 如果后端已经退出，停止重试
-      if (!pythonProcess) {
-        console.log('[main] Backend process gone, stopping health check retries');
-        return;
-      }
-
-      if (Date.now() - startTime > 30000) {
-        console.error('[main] Backend health check timed out');
-        startupStatus = 'timeout';
-        notifyStartupStatus();
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-error', 'Backend startup timeout');
-        }
-        return;
-      }
-      healthCheckTimer = setTimeout(check, 300);
-    }
-
-    check();
-  });
+  startHealthCheck();
 }
 
 // ---------------------------------------------------------------------------
-// Loading HTML with progress
+// Loading HTML
 // ---------------------------------------------------------------------------
 function getLoadingHTML() {
   return `<!DOCTYPE html>
@@ -448,50 +406,18 @@ function getLoadingHTML() {
       color: white;
       width: 320px;
     }
-    .logo {
-      font-size: 64px;
-      margin-bottom: 24px;
-    }
-    h1 {
-      font-size: 24px;
-      font-weight: 500;
-      margin-bottom: 32px;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 4px;
-      background: rgba(255,255,255,0.3);
-      border-radius: 2px;
-      overflow: hidden;
-      margin-bottom: 16px;
-    }
-    .progress-fill {
-      height: 100%;
-      background: white;
-      border-radius: 2px;
-      animation: progress 2s ease-in-out infinite;
-    }
-    @keyframes progress {
-      0% { width: 0%; }
-      50% { width: 70%; }
-      100% { width: 100%; }
-    }
-    .status {
-      font-size: 14px;
-      opacity: 0.9;
-    }
+    .logo { font-size: 64px; margin-bottom: 24px; }
+    h1 { font-size: 24px; font-weight: 500; margin-bottom: 32px; }
     .spinner {
-      width: 32px;
-      height: 32px;
+      width: 32px; height: 32px;
       margin: 0 auto 16px;
       border: 3px solid rgba(255,255,255,0.3);
       border-radius: 50%;
       border-top-color: white;
-      animation: spin 1s ease-in-out infinite;
+      animation: spin 1s linear infinite;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status { font-size: 14px; opacity: 0.9; }
   </style>
 </head>
 <body>
@@ -499,26 +425,23 @@ function getLoadingHTML() {
     <div class="logo">🦷</div>
     <h1>Dental Agent</h1>
     <div class="spinner"></div>
-    <div class="progress-bar">
-      <div class="progress-fill"></div>
-    </div>
-    <div class="status" id="status">Starting services...</div>
+    <div class="status" id="status">Starting...</div>
   </div>
   <script>
     if (window.electronAPI) {
       window.electronAPI.onStartupStatus((data) => {
-        const statusEl = document.getElementById('status');
-        const messages = {
+        const el = document.getElementById('status');
+        const msgs = {
           'initializing': 'Initializing...',
-          'starting_server': 'Starting backend server...',
-          'waiting_backend': 'Waiting for backend to be ready...',
+          'starting_server': 'Starting server...',
+          'waiting_backend': 'Waiting for backend...',
           'ready': 'Ready!',
           'crashed': 'Backend crashed',
           'timeout': 'Startup timeout',
           'error': 'Startup error',
-          'restarting': 'Restarting backend...'
+          'restarting': 'Restarting...'
         };
-        statusEl.textContent = messages[data.status] || data.status;
+        el.textContent = msgs[data.status] || data.status;
       });
     }
   </script>
@@ -587,26 +510,22 @@ if (!gotTheLock) {
     setDefaultCSP();
     setupIPC();
 
-    // 启动后端 + 健康检查
+    createWindow();
     startBackendWithHealthCheck();
 
-    createWindow();
-
-    // 监听后端就绪事件，加载应用
+    // 等待后端就绪或超时后加载应用
     const checkReady = setInterval(() => {
-      if (backendReady) {
+      if (backendReady || backendExited || startupStatus === 'timeout' || startupStatus === 'crashed') {
         clearInterval(checkReady);
         loadApp();
       }
     }, 500);
 
-    // 超时后也加载应用
+    // 最多等待 65 秒
     setTimeout(() => {
-      if (!backendReady) {
-        clearInterval(checkReady);
-        loadApp();
-      }
-    }, 35000);
+      clearInterval(checkReady);
+      loadApp();
+    }, 65000);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -626,7 +545,6 @@ if (!gotTheLock) {
       clearTimeout(healthCheckTimer);
     }
     killPythonBackend();
-    cleanupPortFile();
   });
 
   app.on('quit', () => {

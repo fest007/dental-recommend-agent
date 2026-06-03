@@ -88,7 +88,12 @@ a = Analysis(
         'httpcore',
         'httpcore._backends',
         'httpcore._backends.sync',
-        'httpcore._backends.async_',
+        'httpcore._backends.auto',
+        'httpcore._synchronization',
+        'anyio',
+        'anyio._backends',
+        'anyio._backends._asyncio',
+        'sniffio',
         # http 标准库
         'http',
         'http.client',
