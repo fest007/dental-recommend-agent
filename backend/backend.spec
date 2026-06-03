@@ -53,6 +53,7 @@ a = Analysis(
         'sqlalchemy.orm',
         'sqlalchemy.orm.session',
         'sqlalchemy.orm.scoping',
+        'greenlet',  # SQLAlchemy 异步操作需要
         # 项目直接依赖
         'openai',
         'openai.resources',
