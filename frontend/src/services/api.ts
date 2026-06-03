@@ -3,34 +3,23 @@ import axios, { type AxiosResponse } from 'axios'
 // ---------------------------------------------------------------------------
 // API Base URL - 根据环境自动切换
 // ---------------------------------------------------------------------------
-let _backendURL: string | null = null
-
 async function getBaseURL(): Promise<string> {
-  // 如果已经缓存，直接返回
-  if (_backendURL) {
-    return _backendURL
-  }
-
-  // Electron 环境中，从主进程获取后端 URL
+  // Electron 环境中，从主进程获取后端 URL（不缓存，端口可能动态变化）
   const electronAPI = (window as any).electronAPI
   if (electronAPI) {
     try {
       const url = await electronAPI.getBackendURL()
-      _backendURL = `${url}/api`
-      return _backendURL
+      return `${url}/api`
     } catch (err) {
       console.error('Failed to get backend URL from Electron:', err)
     }
   }
 
-  // 浏览器开发环境，使用相对路径（由 Vite proxy 处理）
+  // 浏览器/file:// 回退
   if (window.location.protocol === 'file:') {
-    // file:// 协议下，使用默认端口
-    _backendURL = 'http://127.0.0.1:8765/api'
-  } else {
-    _backendURL = '/api'
+    return 'http://127.0.0.1:8765/api'
   }
-  return _backendURL
+  return '/api'
 }
 
 // 创建 axios 实例，使用默认值（会在请求时动态更新）
