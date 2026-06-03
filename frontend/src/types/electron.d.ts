@@ -1,7 +1,7 @@
 interface ElectronAPI {
   getBackendURL: () => Promise<string>
   getBackendPort: () => Promise<number>
-  getStartupStatus: () => Promise<string>
+  getStartupStatus: () => Promise<string | { status: string; error?: string }>
   restartBackend: () => Promise<{ status: string }>
   notifyRendererReady: () => Promise<void>
   onBackendReady: (callback: (data: { port: number; url: string }) => void) => void

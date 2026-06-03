@@ -148,7 +148,7 @@ function setupIPC() {
   });
 
   ipcMain.handle('get-startup-status', () => {
-    return startupStatus;
+    return { status: startupStatus, error: lastErrorDetail || undefined };
   });
 
   ipcMain.handle('notify-renderer-ready', () => {

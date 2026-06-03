@@ -128,6 +128,27 @@ scripts\build-exe.bat
 
 详细说明见 [RELEASE.md](RELEASE.md)
 
+## 服务器部署
+
+如果你要把项目部署到 Linux 服务器上，而不是打包桌面应用，可以直接使用仓库内脚本：
+
+```bash
+# 首次部署
+./scripts/deploy-server.sh --domain your-domain.com
+
+# 后续更新
+./scripts/update-server.sh
+```
+
+脚本会自动完成：
+- 后端虚拟环境和依赖安装
+- 前端构建
+- `config.yaml` 初始化
+- `systemd` 服务写入与启动
+- `nginx` 反向代理配置
+
+默认数据目录为项目根目录下的 `.server-data/`。
+
 ## 📁 项目结构
 
 ```

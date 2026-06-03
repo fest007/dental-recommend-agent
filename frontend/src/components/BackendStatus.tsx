@@ -139,8 +139,11 @@ export default function BackendStatus({ children }: BackendStatusProps) {
       })
 
       // 获取初始状态，如果后端已经 ready 则直接标记
-      window.electronAPI.getStartupStatus().then((status: string) => {
-        setStartupStatus({ status })
+      window.electronAPI.getStartupStatus().then((data: any) => {
+        const status = typeof data === 'string' ? data : data.status
+        const error = typeof data === 'object' ? data.error : undefined
+        setStartupStatus({ status, error })
+        if (error) setErrorMessage(error)
         if (status === 'ready') {
           setIsReady(true)
         }
