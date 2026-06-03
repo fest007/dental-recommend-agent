@@ -191,9 +191,22 @@ function startPythonBackend() {
   backendLogFile = fs.openSync(logPath, 'a');
   console.log(`[main] Backend log file: ${logPath}`);
 
+  // 检查可执行文件是否存在
+  if (!fs.existsSync(executable)) {
+    const errMsg = `Backend executable not found: ${executable}`;
+    console.error(`[main] ${errMsg}`);
+    startupStatus = 'error';
+    notifyStartupStatus();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('backend-error', errMsg);
+    }
+    return;
+  }
+
   console.log(`[main] Starting backend: ${executable}`);
   console.log(`[main] Source dir: ${sourceDir}`);
   console.log(`[main] Data dir: ${dataDir}`);
+  console.log(`[main] Platform: ${process.platform}, Arch: ${process.arch}`);
 
   const options = {
     cwd: sourceDir,
@@ -507,12 +520,19 @@ function getLoadingHTML() {
     <h1>Dental Agent</h1>
     <div class="spinner"></div>
     <div class="status" id="status">Starting...</div>
+  <div class="timer" id="timer" style="font-size:12px;opacity:0.5;margin-top:8px"></div>
   </div>
   <script>
+    var t0 = Date.now();
+    setInterval(function() {
+      var s = Math.floor((Date.now() - t0) / 1000);
+      var el = document.getElementById('timer');
+      if (el) el.textContent = s + 's elapsed';
+    }, 1000);
     if (window.electronAPI) {
-      window.electronAPI.onStartupStatus((data) => {
-        const el = document.getElementById('status');
-        const msgs = {
+      window.electronAPI.onStartupStatus(function(data) {
+        var el = document.getElementById('status');
+        var msgs = {
           'initializing': 'Initializing...',
           'starting_server': 'Starting server...',
           'waiting_backend': 'Waiting for backend...',
