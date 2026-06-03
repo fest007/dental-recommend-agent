@@ -69,10 +69,10 @@ jobs:
           if kill -0 $BACKEND_PID 2>/dev/null; then
             echo "✅ Backend smoke test passed"
             kill $BACKEND_PID
-            wait $BACKEND_PID 2>/dev/null
+            wait $BACKEND_PID 2>/dev/null || true
           else
             echo "❌ Backend smoke test failed - process exited unexpectedly"
-            wait $BACKEND_PID
+            wait $BACKEND_PID 2>/dev/null || true
             exit 1
           fi
 

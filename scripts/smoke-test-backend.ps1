@@ -22,7 +22,7 @@ $OccupiedPort = 8765
 $TmpDir       = Join-Path $env:TEMP "smoke-test-$(Get-Random)"
 New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
 
-$BackendProcess    = $null
+$BackendProcess     = $null
 $PortBlockerProcess = $null
 
 function Cleanup {
@@ -39,18 +39,9 @@ try {
     # ---------- 1. 占住首选端口 ----------
     Write-Step "占用端口 $OccupiedPort ..."
 
-    $BlockerScript = @"
-import socket, sys, time
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
-s.bind(('127.0.0.1', $OccupiedPort))
-s.listen(1)
-sys.stdout.write('ready\n')
-sys.stdout.flush()
-time.sleep(120)
-"@
+    $BlockerScript = "import socket, sys, time; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0); s.bind(('127.0.0.1', $OccupiedPort)); s.listen(1); sys.stdout.write('ready\n'); sys.stdout.flush(); time.sleep(300)"
     $PortBlockerProcess = Start-Process -FilePath "python" -ArgumentList "-c", $BlockerScript `
-        -PassThru -WindowStyle Hidden -RedirectStandardOutput "$TmpDir\blocker.out"
+        -PassThru -WindowStyle Hidden
 
     # 等待端口占用者就绪
     $ready = $false
@@ -89,8 +80,8 @@ time.sleep(120)
     Write-Ok "port.json 已生成"
 
     # ---------- 4. 验证端口 ----------
-    $PortInfo    = Get-Content $PortJson -Raw | ConvertFrom-Json
-    $ActualPort  = $PortInfo.port
+    $PortInfo   = Get-Content $PortJson -Raw | ConvertFrom-Json
+    $ActualPort = $PortInfo.port
     Write-Step "port.json 中的端口: $ActualPort"
 
     if ($ActualPort -eq $OccupiedPort) {
