@@ -69,6 +69,16 @@ if __name__ == "__main__":
     import shutil
     import uvicorn
 
+    # 设置默认编码为 UTF-8（解决 Windows GBK 编码问题）
+    import sys
+    if sys.platform == 'win32':
+        import locale
+        import codecs
+        # 强制使用 UTF-8
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+
     # 获取数据目录（从环境变量或默认当前目录）
     data_dir = os.environ.get("DENTAL_AGENT_DATA_DIR")
     if data_dir:
@@ -83,10 +93,14 @@ if __name__ == "__main__":
     # 如果 config.yaml 不存在，从 example 复制或创建默认配置
     if not os.path.exists(config_path):
         if os.path.exists(example_path):
-            shutil.copy2(example_path, config_path)
-            print(f"[init] 已从 config.yaml.example 创建配置: {config_path}")
+            # 使用 UTF-8 编码读取和写入
+            with open(example_path, 'r', encoding='utf-8') as src:
+                content = src.read()
+            with open(config_path, 'w', encoding='utf-8') as dst:
+                dst.write(content)
+            print(f"[init] Created config from example: {config_path}")
         else:
-            # 创建默认配置
+            # 创建默认配置（纯 ASCII，避免编码问题）
             default_config = """llm:
   base_url: "https://api.openai.com/v1"
   api_key: ""
@@ -108,11 +122,12 @@ qdrant:
   path: "qdrant"
   collection: "products"
 """
-            with open(config_path, 'w') as f:
+            with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(default_config)
-            print(f"[init] 已创建默认配置: {config_path}")
+            print(f"[init] Created default config: {config_path}")
 
-    with open(config_path) as f:
+    # 使用 UTF-8 编码读取配置
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
 
     is_dev = os.environ.get("DENTAL_AGENT_DEV", "").lower() in ("1", "true", "yes")

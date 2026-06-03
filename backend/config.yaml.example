@@ -1,38 +1,36 @@
-# =============================================================================
-# 牙科设备推荐Agent - 配置文件示例
-# 复制此文件为 config.yaml 并填入实际配置
-# =============================================================================
+# Dental Recommend Agent Configuration
+# Copy this file to config.yaml and fill in your settings
 
 llm:
-  # OpenAI API 地址（支持兼容 OpenAI 的第三方服务）
+  # OpenAI API base URL (supports compatible third-party services)
   base_url: "https://api.openai.com/v1"
-  # API 密钥（必填）
+  # API Key (required)
   api_key: "your-api-key-here"
-  # 排序模型
+  # Ranking model
   ranking_model: "gpt-4o"
-  # 增强模型
+  # Enrichment model
   enrichment_model: "gpt-4o-mini"
-  # 嵌入模型
+  # Embedding model
   embedding_model: "text-embedding-3-small"
-  # 温度参数
+  # Temperature
   temperature: 0.7
-  # 最大 token 数
+  # Max tokens
   max_tokens: 4096
-  # 超时时间（秒）
+  # Timeout (seconds)
   timeout: 30
 
 server:
-  # 服务器地址（只监听本地）
+  # Server host (local only)
   host: "127.0.0.1"
-  # 服务器端口
+  # Server port
   port: 8765
 
 database:
-  # 数据库路径
-  path: "data/app.db"
+  # Database path
+  path: "app.db"
 
 qdrant:
-  # Qdrant 存储路径
-  path: "data/qdrant"
-  # 集合名称
+  # Qdrant storage path
+  path: "qdrant"
+  # Collection name
   collection: "products"
