@@ -270,9 +270,6 @@ function startPythonBackend() {
 
     // 如果不是正常退出且还没 ready，通知前端
     if (code !== 0 && code !== null && startupStatus !== 'ready') {
-      startupStatus = 'crashed';
-      notifyStartupStatus();
-
       let errorMsg = `Backend crashed with exit code ${code}`;
       try {
         const logPath = path.join(logDir, 'backend.log');
@@ -283,6 +280,10 @@ function startPythonBackend() {
           errorMsg = `Backend crashed (exit code ${code}):\n${lastLines}`;
         }
       } catch {}
+
+      startupStatus = 'crashed';
+      lastErrorDetail = errorMsg;
+      notifyStartupStatus();
 
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('backend-error', errorMsg);
@@ -322,14 +323,21 @@ function killPythonBackend() {
 }
 
 // ---------------------------------------------------------------------------
-// 通知前端启动状态
+// 通知前端启动状态（附带错误详情）
 // ---------------------------------------------------------------------------
+let lastErrorDetail = '';
+
 function notifyStartupStatus() {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('startup-status', {
+    const payload = {
       status: startupStatus,
       port: backendPort,
-    });
+    };
+    // timeout/crashed/error 状态附带错误详情，避免事件时序问题
+    if (lastErrorDetail && (startupStatus === 'timeout' || startupStatus === 'crashed' || startupStatus === 'error')) {
+      payload.error = lastErrorDetail;
+    }
+    mainWindow.webContents.send('startup-status', payload);
   }
 }
 
@@ -427,6 +435,7 @@ function startHealthCheck() {
       }
       console.error('[main] Health check timed out:', detail);
       startupStatus = 'timeout';
+      lastErrorDetail = detail;
       notifyStartupStatus();
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('backend-error', detail);
@@ -455,6 +464,7 @@ function startBackendWithHealthCheck() {
   console.log(`[main] Config port: ${backendPort}`);
 
   startupStatus = 'initializing';
+  lastErrorDetail = '';
   notifyStartupStatus();
 
   // 在启动后端之前清理旧的 port.json 和 renderer-ready marker

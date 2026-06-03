@@ -6,7 +6,7 @@ interface ElectronAPI {
   notifyRendererReady: () => Promise<void>
   onBackendReady: (callback: (data: { port: number; url: string }) => void) => void
   onBackendError: (callback: (message: string) => void) => void
-  onStartupStatus: (callback: (data: { status: string; port?: number }) => void) => void
+  onStartupStatus: (callback: (data: { status: string; port?: number; error?: string }) => void) => void
   removeAllListeners: (channel: string) => void
 }
 

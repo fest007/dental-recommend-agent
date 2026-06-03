@@ -7,6 +7,7 @@ const { Text } = Typography
 interface StartupStatus {
   status: string
   port?: number
+  error?: string
 }
 
 const STATUS_MESSAGES: Record<string, { text: string; percent: number }> = {
@@ -119,8 +120,10 @@ export default function BackendStatus({ children }: BackendStatusProps) {
     if (window.electronAPI) {
       window.electronAPI.onStartupStatus((data: StartupStatus) => {
         setStartupStatus(data)
-        // 清除之前的错误（如果状态变化了）
-        if (data.status !== 'crashed' && data.status !== 'timeout' && data.status !== 'error') {
+        // 状态附带的错误详情（避免事件时序问题）
+        if (data.error) {
+          setErrorMessage(data.error)
+        } else if (data.status !== 'crashed' && data.status !== 'timeout' && data.status !== 'error') {
           setErrorMessage(null)
         }
       })
