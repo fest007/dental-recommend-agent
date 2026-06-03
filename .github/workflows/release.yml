@@ -56,6 +56,24 @@ jobs:
           cd backend
           pyinstaller backend.spec --clean --noconfirm
 
+      # Smoke test: 验证打包后的后端能正常启动
+      - name: Smoke test backend
+        run: |
+          cd backend/dist/backend
+          # 启动后端，等待 5 秒后检查是否还在运行
+          timeout 10 ./backend &
+          BACKEND_PID=$!
+          sleep 5
+          # 检查进程是否还在
+          if kill -0 $BACKEND_PID 2>/dev/null; then
+            echo "✅ Backend smoke test passed"
+            kill $BACKEND_PID
+          else
+            echo "❌ Backend smoke test failed - process exited unexpectedly"
+            wait $BACKEND_PID
+            exit 1
+          fi
+
       - name: Build DMG
         run: |
           npx electron-builder --mac --config --publish never
@@ -109,6 +127,23 @@ jobs:
         run: |
           cd backend
           pyinstaller backend.spec --clean --noconfirm
+
+      # Smoke test: 验证打包后的后端能正常启动
+      - name: Smoke test backend
+        run: |
+          cd backend/dist/backend
+          # 启动后端
+          $process = Start-Process -FilePath ".\backend.exe" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+          # 检查进程是否还在运行
+          if (!$process.HasExited) {
+            Write-Host "✅ Backend smoke test passed"
+            Stop-Process -Id $process.Id -Force
+          } else {
+            Write-Host "❌ Backend smoke test failed - exit code: $($process.ExitCode)"
+            exit 1
+          }
+        shell: pwsh
 
       - name: Build EXE
         run: |

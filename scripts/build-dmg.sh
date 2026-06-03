@@ -50,12 +50,26 @@ cd ..
 print_success "前端构建完成"
 
 # 构建后端
-print_step "2/3" "打包 Python 后端..."
+print_step "2/4" "打包 Python 后端..."
 cd backend
 pyinstaller backend.spec --clean --noconfirm
 [ ! -d "dist/backend" ] && print_error "后端打包失败"
 cd ..
 print_success "后端打包完成"
+
+# Smoke test
+print_step "3/4" "验证后端可执行文件..."
+cd backend/dist/backend
+timeout 10 ./backend &
+BACKEND_PID=$!
+sleep 5
+if kill -0 $BACKEND_PID 2>/dev/null; then
+    print_success "后端 smoke test 通过"
+    kill $BACKEND_PID
+else
+    print_error "后端 smoke test 失败 - 进程异常退出"
+fi
+cd ../../..
 
 # 打包 DMG
 print_step "3/3" "打包 macOS DMG..."

@@ -61,7 +61,7 @@ echo [√] 前端构建完成
 echo.
 
 REM 构建后端
-echo [2/3] 打包 Python 后端...
+echo [2/4] 打包 Python 后端...
 cd backend
 call pyinstaller backend.spec --clean --noconfirm
 if not exist dist\backend (
@@ -72,8 +72,24 @@ cd ..
 echo [√] 后端打包完成
 echo.
 
+REM Smoke test
+echo [3/4] 验证后端可执行文件...
+cd backend\dist\backend
+start /B backend.exe
+timeout /t 5 /nobreak >nul
+tasklist /FI "IMAGENAME eq backend.exe" | find /I "backend.exe" >nul
+if %errorlevel% equ 0 (
+    echo [√] 后端 smoke test 通过
+    taskkill /F /IM backend.exe >nul 2>&1
+) else (
+    echo [错误] 后端 smoke test 失败 - 进程异常退出
+    exit /b 1
+)
+cd ..\..\..
+echo.
+
 REM 打包 Electron
-echo [3/3] 打包 Windows EXE...
+echo [4/4] 打包 Windows EXE...
 call npm ci
 call npx electron-builder --win --config --publish never
 if %errorlevel% neq 0 (
