@@ -132,9 +132,9 @@ print_ok "健康检查通过: $BODY"
 
 # ---------- 6. 验证渲染层加载 ----------
 RENDERER_MARKER="$BACKEND_DATA_DIR/renderer-ready"
-print_info "等待渲染层加载标记 (最多 30 秒) ..."
+print_info "等待渲染层加载标记 (最多 45 秒) ..."
 
-for i in $(seq 1 60); do
+for i in $(seq 1 90); do
     if [ -f "$RENDERER_MARKER" ]; then
         break
     fi
@@ -144,7 +144,7 @@ for i in $(seq 1 60); do
     sleep 0.5
 done
 
-[ -f "$RENDERER_MARKER" ] || print_fail "renderer-ready 未在 30 秒内出现"
+[ -f "$RENDERER_MARKER" ] || print_fail "renderer-ready 未在 45 秒内出现"
 print_ok "渲染层已加载 (marker: $(cat "$RENDERER_MARKER"))"
 
 echo ""

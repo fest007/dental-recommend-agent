@@ -132,9 +132,9 @@ try {
     }
     Write-Ok "Installed: $InstalledExe"
 
-    # 7. Launch installed app
+    # 7. Launch installed app (flags for headless CI rendering)
     Write-Step "Launching installed app ..."
-    $AppProcess = Start-Process -FilePath $InstalledExe -PassThru -WindowStyle Hidden
+    $AppProcess = Start-Process -FilePath $InstalledExe -ArgumentList "--no-sandbox","--disable-gpu" -PassThru -WindowStyle Hidden
     Write-Ok "App started (PID $($AppProcess.Id))"
 
     # 8. Wait for port.json
@@ -173,20 +173,19 @@ try {
     if (-not $ok) { Write-Fail "Health check failed" }
     Write-Ok "Health check passed"
 
-    # 11. Verify renderer loaded (warn-only: headless CI may not render)
+    # 11. Verify renderer loaded
     $marker = Join-Path $BackendDataDir "renderer-ready"
-    Write-Step "Waiting for renderer-ready (up to 30s) ..."
+    Write-Step "Waiting for renderer-ready (up to 45s) ..."
     $markerOk = $false
-    for ($i = 0; $i -lt 60; $i++) {
+    for ($i = 0; $i -lt 90; $i++) {
         if (Test-Path $marker) { $markerOk = $true; break }
-        if ($AppProcess.HasExited) { break }
+        if ($AppProcess.HasExited) {
+            Write-Fail "App exited, renderer-ready not written"
+        }
         Start-Sleep -Milliseconds 500
     }
-    if ($markerOk) {
-        Write-Ok "Renderer loaded"
-    } else {
-        Write-Host "[warn] renderer-ready not found (may be headless CI)" -ForegroundColor Yellow
-    }
+    if (-not $markerOk) { Write-Fail "renderer-ready not found within 45s" }
+    Write-Ok "Renderer loaded"
 
     # Stop app before uninstall
     Stop-Process -Id $AppProcess.Id -Force -ErrorAction SilentlyContinue
