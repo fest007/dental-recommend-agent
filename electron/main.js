@@ -10,6 +10,7 @@ let pythonProcess = null;
 let backendReady = false;
 let backendPort = 8765;
 let startupStatus = 'initializing';
+let healthCheckTimer = null;
 
 const isDev = !app.isPackaged;
 
@@ -128,7 +129,7 @@ function cleanupPortFile() {
 }
 
 // ---------------------------------------------------------------------------
-// 读取后端端口信息（异步，不阻塞主进程）
+// 读取后端端口信息（异步）
 // ---------------------------------------------------------------------------
 async function readBackendPortWithRetry(maxWait = 15000) {
   const portInfoPath = getPortInfoPath();
@@ -145,11 +146,9 @@ async function readBackendPortWithRetry(maxWait = 15000) {
         console.error('[main] Failed to read port info:', err);
       }
     }
-    // 使用 setTimeout 等待，不阻塞主进程
     await new Promise(resolve => setTimeout(resolve, 200));
   }
 
-  // 超时，使用配置文件中的端口
   console.warn('[main] Timeout reading port info, using config port');
   const config = loadConfig();
   return config?.server?.port || 8765;
@@ -173,6 +172,16 @@ function setupIPC() {
 
   ipcMain.handle('get-startup-status', () => {
     return startupStatus;
+  });
+
+  // 重启后端
+  ipcMain.handle('restart-backend', async () => {
+    console.log('[main] Restarting backend...');
+    killPythonBackend();
+    cleanupPortFile();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    startBackendWithHealthCheck();
+    return { status: 'restarting' };
   });
 }
 
@@ -212,19 +221,39 @@ function startPythonBackend() {
   });
 
   pythonProcess.stderr.on('data', (data) => {
-    console.error(`[backend:stderr] ${data.toString().trim()}`);
+    const msg = data.toString().trim();
+    console.error(`[backend:stderr] ${msg}`);
+    // 检测到错误输出时，通知前端
+    if (msg.includes('Error') || msg.includes('error') || msg.includes('Traceback')) {
+      startupStatus = 'error';
+      notifyStartupStatus();
+    }
   });
 
   pythonProcess.on('error', (err) => {
     console.error('[main] Failed to start backend process:', err);
     startupStatus = 'error';
     notifyStartupStatus();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('backend-error', `Failed to start: ${err.message}`);
+    }
   });
 
+  // 关键：后端进程退出时立即通知
   pythonProcess.on('exit', (code, signal) => {
     console.log(`[main] Backend exited with code ${code}, signal ${signal}`);
+    const prevProcess = pythonProcess;
     pythonProcess = null;
     backendReady = false;
+
+    // 如果不是正常退出，通知前端
+    if (code !== 0 && code !== null) {
+      startupStatus = 'crashed';
+      notifyStartupStatus();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend-error', `Backend crashed with exit code ${code}`);
+      }
+    }
   });
 }
 
@@ -271,14 +300,27 @@ function notifyStartupStatus() {
 }
 
 // ---------------------------------------------------------------------------
-// Health polling (非阻塞)
+// 启动后端 + 健康检查（完整流程）
 // ---------------------------------------------------------------------------
-function pollHealthInBackground() {
-  const startTime = Date.now();
+function startBackendWithHealthCheck() {
+  const config = loadConfig();
+  backendPort = config?.server?.port || 8765;
+  console.log(`[main] Config port: ${backendPort}`);
+
+  startupStatus = 'initializing';
+  notifyStartupStatus();
+
+  // 清理旧端口文件
+  cleanupPortFile();
+
+  // 启动后端
+  startPythonBackend();
+
+  // 开始健康检查
   startupStatus = 'waiting_backend';
   notifyStartupStatus();
 
-  // 异步读取后端端口
+  // 异步读取端口并开始健康检查
   readBackendPortWithRetry().then(port => {
     if (port !== backendPort) {
       console.log(`[main] Backend using port ${port} instead of ${backendPort}`);
@@ -286,8 +328,15 @@ function pollHealthInBackground() {
     }
 
     const healthEndpoint = `http://localhost:${backendPort}/api/health`;
+    const startTime = Date.now();
 
     function check() {
+      // 如果后端已经退出，停止检查
+      if (!pythonProcess) {
+        console.log('[main] Backend process gone, stopping health check');
+        return;
+      }
+
       if (backendReady) return;
 
       const req = http.get(healthEndpoint, (res) => {
@@ -316,6 +365,12 @@ function pollHealthInBackground() {
     }
 
     function retry() {
+      // 如果后端已经退出，停止重试
+      if (!pythonProcess) {
+        console.log('[main] Backend process gone, stopping health check retries');
+        return;
+      }
+
       if (Date.now() - startTime > 30000) {
         console.error('[main] Backend health check timed out');
         startupStatus = 'timeout';
@@ -325,7 +380,7 @@ function pollHealthInBackground() {
         }
         return;
       }
-      setTimeout(check, 300);
+      healthCheckTimer = setTimeout(check, 300);
     }
 
     check();
@@ -333,7 +388,7 @@ function pollHealthInBackground() {
 }
 
 // ---------------------------------------------------------------------------
-// Loading HTML with progress (使用 preload 桥接)
+// Loading HTML with progress
 // ---------------------------------------------------------------------------
 function getLoadingHTML() {
   return `<!DOCTYPE html>
@@ -413,7 +468,6 @@ function getLoadingHTML() {
     <div class="status" id="status">Starting services...</div>
   </div>
   <script>
-    // 使用 preload 暴露的 API
     if (window.electronAPI) {
       window.electronAPI.onStartupStatus((data) => {
         const statusEl = document.getElementById('status');
@@ -422,8 +476,10 @@ function getLoadingHTML() {
           'starting_server': 'Starting backend server...',
           'waiting_backend': 'Waiting for backend to be ready...',
           'ready': 'Ready!',
+          'crashed': 'Backend crashed',
           'timeout': 'Startup timeout',
-          'error': 'Startup error'
+          'error': 'Startup error',
+          'restarting': 'Restarting backend...'
         };
         statusEl.textContent = messages[data.status] || data.status;
       });
@@ -450,7 +506,6 @@ function createWindow() {
     },
   });
 
-  // 先显示加载页面
   mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(getLoadingHTML())}`);
 
   mainWindow.once('ready-to-show', () => {
@@ -462,7 +517,6 @@ function createWindow() {
   });
 }
 
-// 加载实际应用
 function loadApp() {
   if (!mainWindow) return;
 
@@ -492,25 +546,14 @@ if (!gotTheLock) {
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // App lifecycle
-  // ---------------------------------------------------------------------------
   app.whenReady().then(async () => {
     setDefaultCSP();
     setupIPC();
 
-    // 清理旧的端口文件
-    cleanupPortFile();
+    // 启动后端 + 健康检查
+    startBackendWithHealthCheck();
 
-    // 读取配置获取端口
-    const config = loadConfig();
-    backendPort = config?.server?.port || 8765;
-    console.log(`[main] Config port: ${backendPort}`);
-
-    startupStatus = 'initializing';
     createWindow();
-    startPythonBackend();
-    pollHealthInBackground();
 
     // 监听后端就绪事件，加载应用
     const checkReady = setInterval(() => {
@@ -520,7 +563,7 @@ if (!gotTheLock) {
       }
     }, 500);
 
-    // 超时后也加载应用（让用户看到错误）
+    // 超时后也加载应用
     setTimeout(() => {
       if (!backendReady) {
         clearInterval(checkReady);
@@ -542,6 +585,9 @@ if (!gotTheLock) {
   });
 
   app.on('before-quit', () => {
+    if (healthCheckTimer) {
+      clearTimeout(healthCheckTimer);
+    }
     killPythonBackend();
     cleanupPortFile();
   });

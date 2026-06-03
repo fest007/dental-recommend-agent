@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
   getStartupStatus: () => ipcRenderer.invoke('get-startup-status'),
 
+  // 重启后端
+  restartBackend: () => ipcRenderer.invoke('restart-backend'),
+
   // 监听事件
   onBackendReady: (callback) => {
     ipcRenderer.on('backend-ready', (event, data) => callback(data));
