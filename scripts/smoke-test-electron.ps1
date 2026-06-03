@@ -121,24 +121,36 @@ try {
         Start-Sleep -Seconds 5
     }
 
-    # 6. Silent NSIS install
+    # 6. Silent NSIS install (fallback to unpacked if installer crashes)
     Write-Step "Silent-installing NSIS package ..."
     $installResult = Start-Process -FilePath $InstallerExe.FullName -ArgumentList "/S" -Wait -PassThru -WindowStyle Hidden
+    $UsedNsis = $true
     if ($installResult.ExitCode -ne 0) {
-        Write-Fail "NSIS install failed (exit $($installResult.ExitCode))"
+        Write-Host "[warn] NSIS install failed (exit $($installResult.ExitCode)), falling back to win-unpacked" -ForegroundColor Yellow
+        $UsedNsis = $false
     }
     Start-Sleep -Seconds 5
 
-    # 7. Find installed app
-    Resolve-InstallDir
-    $InstalledExe = Find-InstalledExe
-    if (-not $InstalledExe) {
-        Write-Fail "Installed exe not found under $ProgramsDir"
+    # 7. Find app to launch (installed or unpacked)
+    $InstalledExe = $null
+    if ($UsedNsis) {
+        Resolve-InstallDir
+        $InstalledExe = Find-InstalledExe
     }
-    Write-Ok "Installed: $InstalledExe"
+    if (-not $InstalledExe) {
+        # Fallback: use win-unpacked
+        $UnpackedDir = Join-Path $ProjectRoot "release\win-unpacked"
+        $InstalledExe = Get-ChildItem "$UnpackedDir\*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch "Uninstall" } |
+            Select-Object -First 1 -ExpandProperty FullName
+        if (-not $InstalledExe) { Write-Fail "No app exe found (NSIS or unpacked)" }
+        Write-Host "[info] Using unpacked: $InstalledExe" -ForegroundColor Yellow
+    } else {
+        Write-Ok "Installed: $InstalledExe"
+    }
 
-    # 8. Launch installed app (flags for headless CI rendering)
-    Write-Step "Launching installed app ..."
+    # 8. Launch app (flags for headless CI rendering)
+    Write-Step "Launching app ..."
     $AppProcess = Start-Process -FilePath $InstalledExe -ArgumentList "--no-sandbox","--disable-gpu" -PassThru -WindowStyle Hidden
     Write-Ok "App started (PID $($AppProcess.Id))"
 
