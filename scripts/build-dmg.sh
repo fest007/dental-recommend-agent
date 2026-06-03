@@ -43,7 +43,7 @@ print_success "清理完成"
 # 构建前端
 print_step "1/3" "构建 React 前端..."
 cd frontend
-[ ! -d "node_modules" ] && npm install
+npm ci
 npm run build
 [ ! -d "dist" ] && print_error "前端构建失败"
 cd ..
@@ -59,7 +59,7 @@ print_success "后端打包完成"
 
 # 打包 DMG
 print_step "3/3" "打包 macOS DMG..."
-[ ! -d "node_modules" ] && npm install
+npm ci
 npx electron-builder --mac --config --publish never
 print_success "DMG 打包完成"
 

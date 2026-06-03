@@ -50,7 +50,7 @@ echo.
 REM 构建前端
 echo [1/3] 构建 React 前端...
 cd frontend
-if not exist node_modules call npm install
+call npm ci
 call npm run build
 if not exist dist (
     echo [错误] 前端构建失败
@@ -74,7 +74,7 @@ echo.
 
 REM 打包 Electron
 echo [3/3] 打包 Windows EXE...
-if not exist node_modules call npm install
+call npm ci
 call npx electron-builder --win --config --publish never
 if %errorlevel% neq 0 (
     echo [错误] Electron 打包失败

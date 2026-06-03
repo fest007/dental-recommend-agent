@@ -37,7 +37,6 @@ function setDefaultCSP() {
 // 路径管理
 // ---------------------------------------------------------------------------
 function getBackendSourceDir() {
-  // 后端可执行文件所在目录（只读）
   if (isDev) {
     return path.join(__dirname, '..', 'backend');
   }
@@ -45,7 +44,6 @@ function getBackendSourceDir() {
 }
 
 function getBackendDataDir() {
-  // 后端数据目录（可写）- 使用 userData
   const dataDir = path.join(app.getPath('userData'), 'backend-data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -59,7 +57,6 @@ function getPythonExecutable() {
   return path.join(backendDir, `backend${ext}`);
 }
 
-// 初始化配置文件（如果不存在）
 function initConfig() {
   const dataDir = getBackendDataDir();
   const configPath = path.join(dataDir, 'config.yaml');
@@ -71,7 +68,6 @@ function initConfig() {
       console.log('[main] Creating config.yaml from example...');
       fs.copyFileSync(examplePath, configPath);
     } else {
-      // 创建默认配置
       console.log('[main] Creating default config.yaml...');
       const defaultConfig = `llm:
   base_url: "https://api.openai.com/v1"
@@ -108,11 +104,10 @@ function startPythonBackend() {
   console.log(`[main] Source dir: ${sourceDir}`);
   console.log(`[main] Data dir: ${dataDir}`);
 
-  // 直接执行，不使用 shell（避免孤儿进程）
   const options = {
     cwd: sourceDir,
     stdio: ['pipe', 'pipe', 'pipe'],
-    shell: false,  // 不使用 shell，直接执行
+    shell: false,
     detached: false,
     env: {
       ...process.env,
@@ -147,22 +142,18 @@ function killPythonBackend() {
   console.log('[main] Killing backend process...');
 
   try {
-    // 获取进程 PID
     const pid = pythonProcess.pid;
     console.log(`[main] Backend PID: ${pid}`);
 
     if (process.platform === 'win32') {
-      // Windows: 使用 taskkill 杀死整个进程树
       try {
         const { execSync } = require('child_process');
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
         console.log('[main] Backend process tree killed via taskkill');
       } catch (e) {
-        // taskkill 可能失败（进程已退出），尝试直接 kill
         pythonProcess.kill('SIGTERM');
       }
     } else {
-      // macOS/Linux: 先 SIGTERM，超时后 SIGKILL
       pythonProcess.kill('SIGTERM');
       setTimeout(() => {
         if (pythonProcess) {
@@ -171,19 +162,6 @@ function killPythonBackend() {
         }
       }, 3000);
     }
-  } catch (err) {
-    console.error('[main] Error killing backend:', err);
-  }
-}
-  console.log('[main] Killing backend process...');
-  try {
-    pythonProcess.kill('SIGTERM');
-    setTimeout(() => {
-      if (pythonProcess) {
-        console.log('[main] Force-killing backend process...');
-        pythonProcess.kill('SIGKILL');
-      }
-    }, 3000);
   } catch (err) {
     console.error('[main] Error killing backend:', err);
   }
@@ -249,7 +227,6 @@ function createWindow() {
     },
   });
 
-  // 立即加载前端
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -273,40 +250,49 @@ function createWindow() {
 }
 
 // ---------------------------------------------------------------------------
-// App lifecycle
+// 单实例保护
 // ---------------------------------------------------------------------------
-app.whenReady().then(async () => {
-  setDefaultCSP();
+const gotTheLock = app.requestSingleInstanceLock();
 
-  // 初始化配置文件
-  initConfig();
-
-  // 立即创建窗口并加载前端
-  createWindow();
-
-  // 后台启动后端
-  startPythonBackend();
-
-  // 后台轮询后端健康状态
-  pollHealthInBackground();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (!gotTheLock) {
+  console.log('[main] Another instance is already running, quitting...');
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
     }
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  // ---------------------------------------------------------------------------
+  // App lifecycle
+  // ---------------------------------------------------------------------------
+  app.whenReady().then(async () => {
+    setDefaultCSP();
+    initConfig();
+    createWindow();
+    startPythonBackend();
+    pollHealthInBackground();
 
-app.on('before-quit', () => {
-  killPythonBackend();
-});
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
 
-app.on('quit', () => {
-  killPythonBackend();
-});
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+
+  app.on('before-quit', () => {
+    killPythonBackend();
+  });
+
+  app.on('quit', () => {
+    killPythonBackend();
+  });
+}
