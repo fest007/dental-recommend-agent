@@ -65,6 +65,50 @@ async def health():
     return {"status": "ok"}
 
 
+def find_available_port(host: str, preferred_port: int) -> int:
+    """Find an available port, starting with the preferred port."""
+    import socket
+
+    def is_port_available(port: int) -> bool:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((host, port))
+                return True
+        except OSError:
+            return False
+
+    # Try preferred port first
+    if is_port_available(preferred_port):
+        return preferred_port
+
+    # Try nearby ports
+    for offset in range(1, 100):
+        for port in [preferred_port + offset, preferred_port - offset]:
+            if 1024 <= port <= 65535 and is_port_available(port):
+                return port
+
+    # Fallback to random available port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((host, 0))
+        return s.getsockname()[1]
+
+
+def write_port_info(data_dir: str, host: str, port: int):
+    """Write port info file for Electron to read."""
+    import json
+    port_info = {
+        "host": host,
+        "port": port,
+        "url": f"http://{host}:{port}",
+        "pid": os.getpid()
+    }
+    port_file = os.path.join(data_dir, "port.json")
+    with open(port_file, 'w', encoding='utf-8') as f:
+        json.dump(port_info, f)
+    print(f"[main] Port info written to: {port_file}")
+
+
 if __name__ == "__main__":
     import shutil
     import uvicorn
@@ -72,9 +116,7 @@ if __name__ == "__main__":
     # 设置默认编码为 UTF-8（解决 Windows GBK 编码问题）
     import sys
     if sys.platform == 'win32':
-        import locale
         import codecs
-        # 强制使用 UTF-8
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
         os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -93,14 +135,12 @@ if __name__ == "__main__":
     # 如果 config.yaml 不存在，从 example 复制或创建默认配置
     if not os.path.exists(config_path):
         if os.path.exists(example_path):
-            # 使用 UTF-8 编码读取和写入
             with open(example_path, 'r', encoding='utf-8') as src:
                 content = src.read()
             with open(config_path, 'w', encoding='utf-8') as dst:
                 dst.write(content)
             print(f"[init] Created config from example: {config_path}")
         else:
-            # 创建默认配置（纯 ASCII，避免编码问题）
             default_config = """llm:
   base_url: "https://api.openai.com/v1"
   api_key: ""
@@ -134,7 +174,15 @@ qdrant:
 
     # 默认使用 127.0.0.1（只监听本地）
     host = config.get("server", {}).get("host", "127.0.0.1")
-    port = config.get("server", {}).get("port", 8765)
+    preferred_port = config.get("server", {}).get("port", 8765)
+
+    # 自动寻找可用端口
+    port = find_available_port(host, preferred_port)
+    if port != preferred_port:
+        print(f"[main] Port {preferred_port} is busy, using port {port} instead")
+
+    # 写入端口信息文件供 Electron 读取
+    write_port_info(config_dir, host, port)
 
     print(f"[main] Starting server on {host}:{port}")
     print(f"[main] Data directory: {config_dir}")

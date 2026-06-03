@@ -8,7 +8,8 @@ const yaml = require('js-yaml');
 let mainWindow = null;
 let pythonProcess = null;
 let backendReady = false;
-let backendPort = 8765; // 默认端口，会从配置文件更新
+let backendPort = 8765;
+let startupStatus = 'initializing';
 
 const isDev = !app.isPackaged;
 
@@ -58,6 +59,10 @@ function getConfigPath() {
   return path.join(getBackendDataDir(), 'config.yaml');
 }
 
+function getPortInfoPath() {
+  return path.join(getBackendDataDir(), 'port.json');
+}
+
 // ---------------------------------------------------------------------------
 // 配置文件管理
 // ---------------------------------------------------------------------------
@@ -66,11 +71,11 @@ function loadConfig() {
   const sourceDir = getBackendSourceDir();
   const examplePath = path.join(sourceDir, 'config.yaml.example');
 
-  // 如果配置文件不存在，创建默认配置
   if (!fs.existsSync(configPath)) {
     if (fs.existsSync(examplePath)) {
       console.log('[main] Creating config.yaml from example...');
-      fs.copyFileSync(examplePath, configPath);
+      const content = fs.readFileSync(examplePath, 'utf-8');
+      fs.writeFileSync(configPath, content, 'utf-8');
     } else {
       console.log('[main] Creating default config.yaml...');
       const defaultConfig = `llm:
@@ -94,24 +99,45 @@ qdrant:
   path: "qdrant"
   collection: "products"
 `;
-      fs.writeFileSync(configPath, defaultConfig);
+      fs.writeFileSync(configPath, defaultConfig, 'utf-8');
     }
   }
 
-  // 读取配置
   try {
-    const configContent = fs.readFileSync(configPath, 'utf8');
-    const config = yaml.load(configContent);
-    return config || {};
+    const configContent = fs.readFileSync(configPath, 'utf-8');
+    return yaml.load(configContent) || {};
   } catch (err) {
     console.error('[main] Failed to load config:', err);
     return {};
   }
 }
 
-function getBackendPort() {
-  const config = loadConfig();
-  return config?.server?.port || 8765;
+// ---------------------------------------------------------------------------
+// 读取后端端口信息
+// ---------------------------------------------------------------------------
+function readBackendPort() {
+  const portInfoPath = getPortInfoPath();
+  const maxWait = 15000; // 最多等待 15 秒
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWait) {
+    if (fs.existsSync(portInfoPath)) {
+      try {
+        const content = fs.readFileSync(portInfoPath, 'utf-8');
+        const portInfo = JSON.parse(content);
+        console.log('[main] Read port info:', portInfo);
+        return portInfo.port;
+      } catch (err) {
+        console.error('[main] Failed to read port info:', err);
+      }
+    }
+    // 文件可能还没写入，等待一下
+    require('child_process').execSync('sleep 0.2', { stdio: 'ignore' });
+  }
+
+  // 超时，使用默认端口
+  console.warn('[main] Timeout reading port info, using default port');
+  return 8765;
 }
 
 function getBackendURL() {
@@ -122,14 +148,16 @@ function getBackendURL() {
 // IPC handlers
 // ---------------------------------------------------------------------------
 function setupIPC() {
-  // 前端请求获取后端 URL
   ipcMain.handle('get-backend-url', () => {
     return getBackendURL();
   });
 
-  // 前端请求获取后端端口
   ipcMain.handle('get-backend-port', () => {
     return backendPort;
+  });
+
+  ipcMain.handle('get-startup-status', () => {
+    return startupStatus;
   });
 }
 
@@ -141,13 +169,9 @@ function startPythonBackend() {
   const sourceDir = getBackendSourceDir();
   const dataDir = getBackendDataDir();
 
-  // 从配置文件读取端口
-  backendPort = getBackendPort();
-
   console.log(`[main] Starting backend: ${executable}`);
   console.log(`[main] Source dir: ${sourceDir}`);
   console.log(`[main] Data dir: ${dataDir}`);
-  console.log(`[main] Backend port: ${backendPort}`);
 
   const options = {
     cwd: sourceDir,
@@ -164,7 +188,13 @@ function startPythonBackend() {
   pythonProcess = spawn(executable, [], options);
 
   pythonProcess.stdout.on('data', (data) => {
-    console.log(`[backend:stdout] ${data.toString().trim()}`);
+    const msg = data.toString().trim();
+    console.log(`[backend:stdout] ${msg}`);
+    // 解析启动状态
+    if (msg.includes('Starting server')) {
+      startupStatus = 'starting_server';
+      notifyStartupStatus();
+    }
   });
 
   pythonProcess.stderr.on('data', (data) => {
@@ -173,6 +203,8 @@ function startPythonBackend() {
 
   pythonProcess.on('error', (err) => {
     console.error('[main] Failed to start backend process:', err);
+    startupStatus = 'error';
+    notifyStartupStatus();
   });
 
   pythonProcess.on('exit', (code, signal) => {
@@ -213,50 +245,177 @@ function killPythonBackend() {
 }
 
 // ---------------------------------------------------------------------------
+// 通知前端启动状态
+// ---------------------------------------------------------------------------
+function notifyStartupStatus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('startup-status', {
+      status: startupStatus,
+      port: backendPort,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Health polling (非阻塞)
 // ---------------------------------------------------------------------------
 function pollHealthInBackground() {
   const startTime = Date.now();
-  const healthEndpoint = `http://localhost:${backendPort}/api/health`;
+  startupStatus = 'waiting_backend';
+  notifyStartupStatus();
 
-  function check() {
-    if (backendReady) return;
-
-    const req = http.get(healthEndpoint, (res) => {
-      if (res.statusCode === 200) {
-        console.log('[main] Backend health check passed.');
-        backendReady = true;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-ready', {
-            port: backendPort,
-            url: getBackendURL(),
-          });
-        }
-      } else {
-        retry();
-      }
-      res.resume();
-    });
-
-    req.on('error', () => retry());
-    req.setTimeout(2000, () => {
-      req.destroy();
-      retry();
-    });
-  }
-
-  function retry() {
-    if (Date.now() - startTime > 30000) {
-      console.error('[main] Backend health check timed out');
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('backend-error', '后端服务启动超时');
-      }
-      return;
+  // 先读取后端实际端口
+  setTimeout(() => {
+    const port = readBackendPort();
+    if (port !== backendPort) {
+      console.log(`[main] Backend using port ${port} instead of ${backendPort}`);
+      backendPort = port;
     }
-    setTimeout(check, 300);
-  }
 
-  check();
+    const healthEndpoint = `http://localhost:${backendPort}/api/health`;
+
+    function check() {
+      if (backendReady) return;
+
+      const req = http.get(healthEndpoint, (res) => {
+        if (res.statusCode === 200) {
+          console.log('[main] Backend health check passed.');
+          backendReady = true;
+          startupStatus = 'ready';
+          notifyStartupStatus();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-ready', {
+              port: backendPort,
+              url: getBackendURL(),
+            });
+          }
+        } else {
+          retry();
+        }
+        res.resume();
+      });
+
+      req.on('error', () => retry());
+      req.setTimeout(2000, () => {
+        req.destroy();
+        retry();
+      });
+    }
+
+    function retry() {
+      if (Date.now() - startTime > 30000) {
+        console.error('[main] Backend health check timed out');
+        startupStatus = 'timeout';
+        notifyStartupStatus();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('backend-error', 'Backend startup timeout');
+        }
+        return;
+      }
+      setTimeout(check, 300);
+    }
+
+    check();
+  }, 1000); // 等待 1 秒让后端写入端口文件
+}
+
+// ---------------------------------------------------------------------------
+// Loading HTML with progress
+// ---------------------------------------------------------------------------
+function getLoadingHTML() {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Dental Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      text-align: center;
+      color: white;
+      width: 320px;
+    }
+    .logo {
+      font-size: 64px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 500;
+      margin-bottom: 32px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: white;
+      border-radius: 2px;
+      animation: progress 2s ease-in-out infinite;
+    }
+    @keyframes progress {
+      0% { width: 0%; }
+      50% { width: 70%; }
+      100% { width: 100%; }
+    }
+    .status {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 16px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🦷</div>
+    <h1>Dental Agent</h1>
+    <div class="spinner"></div>
+    <div class="progress-bar">
+      <div class="progress-fill"></div>
+    </div>
+    <div class="status" id="status">Starting services...</div>
+  </div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.on('startup-status', (event, data) => {
+      const statusEl = document.getElementById('status');
+      const messages = {
+        'initializing': 'Initializing...',
+        'starting_server': 'Starting backend server...',
+        'waiting_backend': 'Waiting for backend to be ready...',
+        'ready': 'Ready!',
+        'timeout': 'Startup timeout',
+        'error': 'Startup error'
+      };
+      statusEl.textContent = messages[data.status] || data.status;
+    });
+  </script>
+</body>
+</html>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -266,15 +425,30 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: '牙科设备推荐Agent',
+    title: 'Dental Agent',
     show: false,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
+      nodeIntegration: true,
+      contextIsolation: false,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  // 先显示加载页面
+  mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(getLoadingHTML())}`);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+// 加载实际应用
+function loadApp() {
+  if (!mainWindow) return;
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -284,18 +458,6 @@ function createWindow() {
     console.log('[main] Loading app from:', indexPath);
     mainWindow.loadFile(indexPath);
   }
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('[main] Failed to load:', errorCode, errorDescription);
-  });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -322,12 +484,30 @@ if (!gotTheLock) {
     setupIPC();
 
     // 读取配置获取端口
-    backendPort = getBackendPort();
-    console.log(`[main] Using backend port: ${backendPort}`);
+    const config = loadConfig();
+    backendPort = config?.server?.port || 8765;
+    console.log(`[main] Config port: ${backendPort}`);
 
+    startupStatus = 'initializing';
     createWindow();
     startPythonBackend();
     pollHealthInBackground();
+
+    // 监听后端就绪事件，加载应用
+    const checkReady = setInterval(() => {
+      if (backendReady) {
+        clearInterval(checkReady);
+        loadApp();
+      }
+    }, 500);
+
+    // 超时后也加载应用（让用户看到错误）
+    setTimeout(() => {
+      if (!backendReady) {
+        clearInterval(checkReady);
+        loadApp();
+      }
+    }, 35000);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
