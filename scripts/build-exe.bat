@@ -75,7 +75,7 @@ echo.
 REM 打包 Electron
 echo [3/3] 打包 Windows EXE...
 if not exist node_modules call npm install
-call npx electron-builder --win --config
+call npx electron-builder --win --config --publish never
 if %errorlevel% neq 0 (
     echo [错误] Electron 打包失败
     exit /b 1

@@ -96,24 +96,26 @@ npm run dev:frontend  # 前端 http://localhost:5173
 
 ## 📦 打包发布
 
-### macOS DMG
+### macOS DMG（在 Mac 上打包）
 
 ```bash
 ./scripts/build-dmg.sh
 ```
 
-### Windows EXE
+### Windows EXE（在 Windows 上打包）
 
 ```cmd
-# 在 Windows 上运行
-scripts/build-exe.bat
+scripts\build-exe.bat
 ```
 
-### 所有平台
+### 自动构建（推荐）
 
 ```bash
-./scripts/build-all.sh
+# 触发 GitHub Actions 自动构建 macOS + Windows
+./scripts/release.sh 1.0.0
 ```
+
+> ⚠️ Windows 安装包必须在 Windows 环境构建，不支持 macOS 交叉编译。
 
 详细说明见 [BUILD.md](BUILD.md)
 

@@ -22,7 +22,10 @@ import {
   ExpandOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import * as echarts from 'echarts/core'
+import { GraphChart } from 'echarts/charts'
+import { TooltipComponent, LegendComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import {
   getProductGraph,
   getRelationTypes,
@@ -30,6 +33,9 @@ import {
   type RelationType,
 } from '../services/api'
 import styles from './ProductGraph.module.less'
+
+// 注册 echarts 组件
+echarts.use([GraphChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
 // 关系类型颜色映射
 const RELATION_COLORS: Record<string, string> = {
@@ -61,7 +67,8 @@ export default function ProductGraph() {
   const [relationTypes, setRelationTypes] = useState<RelationType[]>([])
   const [selectedType, setSelectedType] = useState<string | undefined>(undefined)
   const [limit, setLimit] = useState(200)
-  const [chartInstance, setChartInstance] = useState<any>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
+  const chartInstanceRef = useRef<echarts.ECharts | null>(null)
 
   const fetchRelationTypes = useCallback(async () => {
     try {
@@ -95,10 +102,16 @@ export default function ProductGraph() {
     fetchGraphData()
   }, [fetchGraphData])
 
-  const getChartOption = () => {
-    if (!graphData || graphData.nodes.length === 0) {
-      return {}
+  // 初始化和更新图表
+  useEffect(() => {
+    if (!chartRef.current || !graphData || graphData.nodes.length === 0) return
+
+    // 初始化图表
+    if (!chartInstanceRef.current) {
+      chartInstanceRef.current = echarts.init(chartRef.current)
     }
+
+    const chart = chartInstanceRef.current
 
     // 计算节点大小基于连接数
     const nodeConnections: Record<string, number> = {}
@@ -121,7 +134,7 @@ export default function ProductGraph() {
       symbolSize: Math.min(Math.max(10, (nodeConnections[node.id] || 1) * 3), 50),
       label: {
         show: (nodeConnections[node.id] || 0) > 2,
-        position: 'right',
+        position: 'right' as const,
         fontSize: 10,
       },
     }))
@@ -136,29 +149,32 @@ export default function ProductGraph() {
         width: Math.max(1, link.weight * 3),
         curveness: 0.3,
       },
-      tooltip: {
-        formatter: () => {
-          const typeLabel = RELATION_LABELS[link.relation_type] || link.relation_type
-          return `<strong>${typeLabel}</strong><br/>${link.description}<br/>权重: ${link.weight.toFixed(2)}`
-        },
-      },
     }))
 
-    return {
+    const option = {
       tooltip: {
-        trigger: 'item',
+        trigger: 'item' as const,
         formatter: (params: any) => {
           if (params.dataType === 'node') {
             const connCount = nodeConnections[params.data.id] || 0
             return `<strong>${params.data.name}</strong><br/>SKU: ${params.data.id}<br/>品类: ${graphData.categories[params.data.category] || '-'}<br/>关联数: ${connCount}`
+          }
+          if (params.dataType === 'edge') {
+            const link = graphData.links.find(
+              (l) => l.source === params.data.source && l.target === params.data.target
+            )
+            if (link) {
+              const typeLabel = RELATION_LABELS[link.relation_type] || link.relation_type
+              return `<strong>${typeLabel}</strong><br/>${link.description}<br/>权重: ${link.weight.toFixed(2)}`
+            }
           }
           return ''
         },
       },
       legend: {
         data: categories.map((c) => c.name),
-        type: 'scroll',
-        orient: 'vertical',
+        type: 'scroll' as const,
+        orient: 'vertical' as const,
         right: 10,
         top: 60,
         bottom: 20,
@@ -167,12 +183,12 @@ export default function ProductGraph() {
         },
       },
       animationDuration: 1500,
-      animationEasingUpdate: 'quinticInOut',
+      animationEasingUpdate: 'quinticInOut' as const,
       series: [
         {
           name: '商品关系图谱',
-          type: 'graph',
-          layout: 'force',
+          type: 'graph' as const,
+          layout: 'force' as const,
           data: nodes,
           links: links,
           categories: categories,
@@ -185,7 +201,7 @@ export default function ProductGraph() {
             layoutAnimation: true,
           },
           emphasis: {
-            focus: 'adjacency',
+            focus: 'adjacency' as const,
             lineStyle: {
               width: 4,
             },
@@ -200,11 +216,39 @@ export default function ProductGraph() {
         },
       ],
     }
-  }
+
+    chart.setOption(option, true)
+
+    // 清理函数
+    return () => {
+      // 不销毁，只在组件卸载时销毁
+    }
+  }, [graphData])
+
+  // 组件卸载时销毁图表
+  useEffect(() => {
+    return () => {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.dispose()
+        chartInstanceRef.current = null
+      }
+    }
+  }, [])
+
+  // 窗口大小变化时重绘
+  useEffect(() => {
+    const handleResize = () => {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.resize()
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const handleZoomIn = () => {
-    if (chartInstance) {
-      chartInstance.dispatchAction({
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.dispatchAction({
         type: 'graphRoam',
         zoom: 1.2,
       })
@@ -212,8 +256,8 @@ export default function ProductGraph() {
   }
 
   const handleZoomOut = () => {
-    if (chartInstance) {
-      chartInstance.dispatchAction({
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.dispatchAction({
         type: 'graphRoam',
         zoom: 0.8,
       })
@@ -221,8 +265,8 @@ export default function ProductGraph() {
   }
 
   const handleReset = () => {
-    if (chartInstance) {
-      chartInstance.dispatchAction({
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.dispatchAction({
         type: 'restore',
       })
     }
@@ -314,11 +358,9 @@ export default function ProductGraph() {
       <Card>
         <Spin spinning={loading}>
           {graphData && graphData.nodes.length > 0 ? (
-            <ReactECharts
-              option={getChartOption()}
-              style={{ height: 'clamp(520px, calc(100dvh - 360px), 820px)' }}
-              onChartReady={(instance) => setChartInstance(instance)}
-              opts={{ renderer: 'canvas' }}
+            <div
+              ref={chartRef}
+              style={{ height: 'clamp(520px, calc(100dvh - 360px), 820px)', width: '100%' }}
             />
           ) : (
             <Empty

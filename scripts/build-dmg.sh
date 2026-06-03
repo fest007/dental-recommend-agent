@@ -60,7 +60,7 @@ print_success "后端打包完成"
 # 打包 DMG
 print_step "3/3" "打包 macOS DMG..."
 [ ! -d "node_modules" ] && npm install
-npx electron-builder --mac --config
+npx electron-builder --mac --config --publish never
 print_success "DMG 打包完成"
 
 # 显示结果

@@ -6,12 +6,13 @@ const http = require('http');
 
 let mainWindow = null;
 let pythonProcess = null;
+let backendReady = false;
 
 const isDev = !app.isPackaged;
 const BACKEND_PORT = 8765;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 const HEALTH_ENDPOINT = `${BACKEND_URL}/api/health`;
-const HEALTH_POLL_INTERVAL = 500;
+const HEALTH_POLL_INTERVAL = 300;
 const HEALTH_POLL_TIMEOUT = 30000;
 
 // ---------------------------------------------------------------------------
@@ -24,7 +25,7 @@ function setDefaultCSP() {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           isDev
-            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:* ws://localhost:*; img-src 'self' data:; font-src 'self' data:;"
+            ? "default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:* ws://localhost:*; img-src 'self' data:; font-src 'self' data:;"
             : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:*; img-src 'self' data:; font-src 'self' data:;"
         ],
       },
@@ -33,49 +34,86 @@ function setDefaultCSP() {
 }
 
 // ---------------------------------------------------------------------------
-// Python backend management
+// 路径管理
 // ---------------------------------------------------------------------------
-function getBackendDir() {
+function getBackendSourceDir() {
+  // 后端可执行文件所在目录（只读）
   if (isDev) {
     return path.join(__dirname, '..', 'backend');
   }
   return path.join(process.resourcesPath, 'backend');
 }
 
+function getBackendDataDir() {
+  // 后端数据目录（可写）- 使用 userData
+  const dataDir = path.join(app.getPath('userData'), 'backend-data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return dataDir;
+}
+
 function getPythonExecutable() {
-  const backendDir = getBackendDir();
+  const backendDir = getBackendSourceDir();
   const ext = process.platform === 'win32' ? '.exe' : '';
   return path.join(backendDir, `backend${ext}`);
 }
 
 // 初始化配置文件（如果不存在）
 function initConfig() {
-  const backendDir = getBackendDir();
-  const configPath = path.join(backendDir, 'config.yaml');
-  const examplePath = path.join(backendDir, 'config.yaml.example');
+  const dataDir = getBackendDataDir();
+  const configPath = path.join(dataDir, 'config.yaml');
+  const sourceDir = getBackendSourceDir();
+  const examplePath = path.join(sourceDir, 'config.yaml.example');
 
-  if (!fs.existsSync(configPath) && fs.existsSync(examplePath)) {
-    console.log('[main] Creating config.yaml from example...');
-    fs.copyFileSync(examplePath, configPath);
+  if (!fs.existsSync(configPath)) {
+    if (fs.existsSync(examplePath)) {
+      console.log('[main] Creating config.yaml from example...');
+      fs.copyFileSync(examplePath, configPath);
+    } else {
+      // 创建默认配置
+      console.log('[main] Creating default config.yaml...');
+      const defaultConfig = `llm:
+  base_url: "https://api.openai.com/v1"
+  api_key: ""
+  ranking_model: "gpt-4o"
+  enrichment_model: "gpt-4o-mini"
+  embedding_model: "text-embedding-3-small"
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 30
+
+server:
+  host: "127.0.0.1"
+  port: ${BACKEND_PORT}
+
+database:
+  path: "app.db"
+
+qdrant:
+  path: "qdrant"
+  collection: "products"
+`;
+      fs.writeFileSync(configPath, defaultConfig);
+    }
   }
 }
 
 function startPythonBackend() {
   const executable = getPythonExecutable();
-  const backendDir = getBackendDir();
-  const dataDir = app.getPath('userData');
+  const sourceDir = getBackendSourceDir();
+  const dataDir = getBackendDataDir();
 
-  // 确保数据目录存在
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+  console.log(`[main] Starting backend: ${executable}`);
+  console.log(`[main] Source dir: ${sourceDir}`);
+  console.log(`[main] Data dir: ${dataDir}`);
 
-  console.log(`[main] Starting backend: ${executable} (dir: ${backendDir}, data: ${dataDir})`);
-
+  // 直接执行，不使用 shell（避免孤儿进程）
   const options = {
-    cwd: backendDir,
+    cwd: sourceDir,
     stdio: ['pipe', 'pipe', 'pipe'],
-    shell: process.platform === 'win32',
+    shell: false,  // 不使用 shell，直接执行
+    detached: false,
     env: {
       ...process.env,
       DENTAL_AGENT_DATA_DIR: dataDir,
@@ -100,11 +138,43 @@ function startPythonBackend() {
   pythonProcess.on('exit', (code, signal) => {
     console.log(`[main] Backend exited with code ${code}, signal ${signal}`);
     pythonProcess = null;
+    backendReady = false;
   });
 }
 
 function killPythonBackend() {
   if (!pythonProcess) return;
+  console.log('[main] Killing backend process...');
+
+  try {
+    // 获取进程 PID
+    const pid = pythonProcess.pid;
+    console.log(`[main] Backend PID: ${pid}`);
+
+    if (process.platform === 'win32') {
+      // Windows: 使用 taskkill 杀死整个进程树
+      try {
+        const { execSync } = require('child_process');
+        execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
+        console.log('[main] Backend process tree killed via taskkill');
+      } catch (e) {
+        // taskkill 可能失败（进程已退出），尝试直接 kill
+        pythonProcess.kill('SIGTERM');
+      }
+    } else {
+      // macOS/Linux: 先 SIGTERM，超时后 SIGKILL
+      pythonProcess.kill('SIGTERM');
+      setTimeout(() => {
+        if (pythonProcess) {
+          console.log('[main] Force-killing backend process...');
+          pythonProcess.kill('SIGKILL');
+        }
+      }, 3000);
+    }
+  } catch (err) {
+    console.error('[main] Error killing backend:', err);
+  }
+}
   console.log('[main] Killing backend process...');
   try {
     pythonProcess.kill('SIGTERM');
@@ -120,40 +190,46 @@ function killPythonBackend() {
 }
 
 // ---------------------------------------------------------------------------
-// Health polling
+// Health polling (非阻塞)
 // ---------------------------------------------------------------------------
-function pollHealth() {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
+function pollHealthInBackground() {
+  const startTime = Date.now();
 
-    function check() {
-      const req = http.get(HEALTH_ENDPOINT, (res) => {
-        if (res.statusCode === 200) {
-          console.log('[main] Backend health check passed.');
-          resolve();
-        } else {
-          retry();
+  function check() {
+    if (backendReady) return;
+
+    const req = http.get(HEALTH_ENDPOINT, (res) => {
+      if (res.statusCode === 200) {
+        console.log('[main] Backend health check passed.');
+        backendReady = true;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('backend-ready');
         }
-        res.resume();
-      });
-
-      req.on('error', () => retry());
-      req.setTimeout(2000, () => {
-        req.destroy();
+      } else {
         retry();
-      });
-    }
-
-    function retry() {
-      if (Date.now() - startTime > HEALTH_POLL_TIMEOUT) {
-        reject(new Error('Backend health check timed out'));
-        return;
       }
-      setTimeout(check, HEALTH_POLL_INTERVAL);
-    }
+      res.resume();
+    });
 
-    check();
-  });
+    req.on('error', () => retry());
+    req.setTimeout(2000, () => {
+      req.destroy();
+      retry();
+    });
+  }
+
+  function retry() {
+    if (Date.now() - startTime > HEALTH_POLL_TIMEOUT) {
+      console.error('[main] Backend health check timed out');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend-error', '后端服务启动超时');
+      }
+      return;
+    }
+    setTimeout(check, HEALTH_POLL_INTERVAL);
+  }
+
+  check();
 }
 
 // ---------------------------------------------------------------------------
@@ -164,30 +240,29 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: '牙科设备推荐Agent',
-    show: false, // 先隐藏窗口，等加载完成后再显示
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
+  // 立即加载前端
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    // 生产模式：加载打包后的前端文件
     const indexPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
-    console.log('[main] Loading index.html from:', indexPath);
+    console.log('[main] Loading app from:', indexPath);
     mainWindow.loadFile(indexPath);
   }
 
-  // 窗口加载完成后显示
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  // 加载失败时显示错误
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('[main] Failed to load:', errorCode, errorDescription);
   });
@@ -206,23 +281,14 @@ app.whenReady().then(async () => {
   // 初始化配置文件
   initConfig();
 
-  // Start Python backend and wait for it to be ready
+  // 立即创建窗口并加载前端
+  createWindow();
+
+  // 后台启动后端
   startPythonBackend();
 
-  try {
-    await pollHealth();
-    console.log('[main] Backend is ready.');
-  } catch (err) {
-    console.error('[main] Backend failed to start:', err.message);
-    dialog.showErrorBox(
-      '启动失败',
-      `后端服务启动失败：${err.message}\n\n请检查是否有其他程序占用了端口 ${BACKEND_PORT}`
-    );
-    app.quit();
-    return;
-  }
-
-  createWindow();
+  // 后台轮询后端健康状态
+  pollHealthInBackground();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

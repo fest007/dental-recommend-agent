@@ -97,7 +97,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,  # 桌面应用不显示控制台窗口
     disable_windowed_traceback=False,
 )
 

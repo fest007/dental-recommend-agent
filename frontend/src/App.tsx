@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Space, Typography } from 'antd'
 import {
   MessageOutlined, ShoppingOutlined, UnorderedListOutlined,
@@ -17,6 +17,7 @@ import Recommendations from './pages/Recommendations'
 import ProductGraph from './pages/ProductGraph'
 import Settings from './pages/Settings'
 import FloatingAssistant from './components/FloatingAssistant'
+import BackendStatus from './components/BackendStatus'
 import styles from './App.module.less'
 
 const { Sider, Content, Header } = Layout
@@ -115,9 +116,11 @@ function AppLayout() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppLayout />
-    </BrowserRouter>
+    <BackendStatus>
+      <HashRouter>
+        <AppLayout />
+      </HashRouter>
+    </BackendStatus>
   )
 }
 

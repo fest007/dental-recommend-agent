@@ -1,9 +1,21 @@
 import axios, { type AxiosResponse } from 'axios'
 
 // ---------------------------------------------------------------------------
+// API Base URL - 根据环境自动切换
+// ---------------------------------------------------------------------------
+function getBaseURL(): string {
+  // Electron 环境中，直接请求本地后端
+  if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+    return 'http://localhost:8765/api'
+  }
+  // 浏览器开发环境，使用相对路径（由 Vite proxy 处理）
+  return '/api'
+}
+
+// ---------------------------------------------------------------------------
 // Axios instance
 // ---------------------------------------------------------------------------
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({ baseURL: getBaseURL() })
 
 // ---------------------------------------------------------------------------
 // Common types

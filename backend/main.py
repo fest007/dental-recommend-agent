@@ -69,21 +69,64 @@ if __name__ == "__main__":
     import shutil
     import uvicorn
 
-    config_dir = os.path.dirname(__file__) if os.path.dirname(__file__) else "."
-    config_path = os.path.join(config_dir, "config.yaml")
-    example_path = os.path.join(config_dir, "config.yaml.example")
+    # 获取数据目录（从环境变量或默认当前目录）
+    data_dir = os.environ.get("DENTAL_AGENT_DATA_DIR")
+    if data_dir:
+        os.makedirs(data_dir, exist_ok=True)
+        config_dir = data_dir
+    else:
+        config_dir = os.path.dirname(__file__) if os.path.dirname(__file__) else "."
 
-    # 如果 config.yaml 不存在，从 example 复制
-    if not os.path.exists(config_path) and os.path.exists(example_path):
-        shutil.copy2(example_path, config_path)
-        print(f"[init] 已从 config.yaml.example 创建 config.yaml")
+    config_path = os.path.join(config_dir, "config.yaml")
+    example_path = os.path.join(os.path.dirname(__file__) if os.path.dirname(__file__) else ".", "config.yaml.example")
+
+    # 如果 config.yaml 不存在，从 example 复制或创建默认配置
+    if not os.path.exists(config_path):
+        if os.path.exists(example_path):
+            shutil.copy2(example_path, config_path)
+            print(f"[init] 已从 config.yaml.example 创建配置: {config_path}")
+        else:
+            # 创建默认配置
+            default_config = """llm:
+  base_url: "https://api.openai.com/v1"
+  api_key: ""
+  ranking_model: "gpt-4o"
+  enrichment_model: "gpt-4o-mini"
+  embedding_model: "text-embedding-3-small"
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 30
+
+server:
+  host: "127.0.0.1"
+  port: 8765
+
+database:
+  path: "app.db"
+
+qdrant:
+  path: "qdrant"
+  collection: "products"
+"""
+            with open(config_path, 'w') as f:
+                f.write(default_config)
+            print(f"[init] 已创建默认配置: {config_path}")
 
     with open(config_path) as f:
         config = yaml.safe_load(f)
+
     is_dev = os.environ.get("DENTAL_AGENT_DEV", "").lower() in ("1", "true", "yes")
+
+    # 默认使用 127.0.0.1（只监听本地）
+    host = config.get("server", {}).get("host", "127.0.0.1")
+    port = config.get("server", {}).get("port", 8765)
+
+    print(f"[main] Starting server on {host}:{port}")
+    print(f"[main] Data directory: {config_dir}")
+
     uvicorn.run(
         "main:app",
-        host=config["server"]["host"],
-        port=config["server"]["port"],
+        host=host,
+        port=port,
         reload=is_dev,
     )

@@ -12,9 +12,7 @@
     "build": "cd frontend && npm run build",
     "build:backend": "cd backend && pyinstaller backend.spec --clean",
     "electron:dev": "wait-on http://localhost:5173 && electron .",
-    "dist": "npm run build && npm run build:backend && electron-builder",
-    "dist:mac": "npm run build && npm run build:backend && electron-builder --mac",
-    "dist:win": "npm run build && npm run build:backend && electron-builder --win"
+    "dist:mac": "npm run build && npm run build:backend && electron-builder --mac --publish never"
   },
   "devDependencies": {
     "electron": "^28.0.0",
@@ -71,7 +69,8 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "electron/icon.ico"
+      "icon": "electron/icon.ico",
+      "arch": ["x64"]
     },
     "nsis": {
       "oneClick": false,
