@@ -69,19 +69,36 @@ try {
     # 2. Start backend
     Write-Step "Starting backend ..."
     $env:DENTAL_AGENT_DATA_DIR = $TmpDir
-    $BackendProc = Start-Process -FilePath $BackendBin -PassThru -WindowStyle Hidden
+    $logFile = Join-Path $TmpDir "backend-stderr.log"
+    $BackendProc = Start-Process -FilePath $BackendBin -PassThru -WindowStyle Hidden -RedirectStandardError $logFile -RedirectStandardOutput "$TmpDir\backend-stdout.log"
     Remove-Item Env:\DENTAL_AGENT_DATA_DIR -ErrorAction SilentlyContinue
     Write-Ok "Backend started (PID $($BackendProc.Id))"
 
     # 3. Wait for port.json
     $PortJson = Join-Path $TmpDir "port.json"
-    Write-Step "Waiting for port.json ..."
+    Write-Step "Waiting for port.json (up to 30s) ..."
     $found = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
         if (Test-Path $PortJson) { $found = $true; break }
+        # Check if backend crashed
+        if ($BackendProc.HasExited) {
+            Write-Host "[debug] Backend exited early with code $($BackendProc.ExitCode)" -ForegroundColor Red
+            if (Test-Path $logFile) {
+                Write-Host "[debug] stderr:" -ForegroundColor Red
+                Get-Content $logFile -Tail 20 | ForEach-Object { Write-Host "  $_" }
+            }
+            Write-Fail "Backend process exited before writing port.json"
+        }
         Start-Sleep -Milliseconds 500
     }
-    if (-not $found) { Write-Fail "port.json not found within 15s" }
+    if (-not $found) {
+        Write-Host "[debug] Backend still running but no port.json" -ForegroundColor Yellow
+        if (Test-Path $logFile) {
+            Write-Host "[debug] stderr:" -ForegroundColor Yellow
+            Get-Content $logFile -Tail 20 | ForEach-Object { Write-Host "  $_" }
+        }
+        Write-Fail "port.json not found within 30s"
+    }
     Write-Ok "port.json created"
 
     # 4. Verify port changed
