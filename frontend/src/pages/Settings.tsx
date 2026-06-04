@@ -379,8 +379,8 @@ export default function Settings() {
         </div>
 
         {/* Advanced settings */}
-        <Collapse style={{ marginTop: 24 }}>
-          <Panel header="高级设置" key="advanced">
+        <Collapse style={{ marginTop: 24 }} defaultActiveKey={['advanced']}>
+          <Panel header="高级设置" key="advanced" forceRender>
             <Form form={form} layout="inline" style={{ flexWrap: 'wrap', gap: 16 }}>
               <Form.Item name="temperature" label="Temperature">
                 <InputNumber min={0} max={2} step={0.1} style={{ width: 120 }} />

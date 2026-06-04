@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>牙科设备推荐Agent 用户使用指南</title>
+  <style>
+    :root {
+      --bg: #f6f1e8;
+      --paper: rgba(255, 252, 246, 0.92);
+      --ink: #1f1a17;
+      --muted: #655b54;
+      --line: rgba(76, 57, 42, 0.16);
+      --accent: #b84c2a;
+      --accent-soft: #f5d3bf;
+      --green: #2f6b4f;
+      --gold: #9c6a12;
+      --shadow: 0 24px 80px rgba(79, 55, 35, 0.14);
+      --radius: 22px;
+      --content-width: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "PingFang SC", "Hiragino Sans GB", "Noto Serif CJK SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(184, 76, 42, 0.14), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(47, 107, 79, 0.12), transparent 28%),
+        linear-gradient(180deg, #f8f3ea 0%, #f1eadf 100%);
+      line-height: 1.7;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .shell {
+      width: min(calc(100% - 32px), var(--content-width));
+      margin: 0 auto;
+      padding: 32px 0 64px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 40px;
+      border: 1px solid rgba(90, 63, 39, 0.12);
+      border-radius: 32px;
+      background:
+        linear-gradient(135deg, rgba(255, 248, 237, 0.95), rgba(255, 251, 246, 0.86)),
+        linear-gradient(180deg, rgba(184, 76, 42, 0.08), rgba(47, 107, 79, 0.06));
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(184, 76, 42, 0.14), transparent 70%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(184, 76, 42, 0.10);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      font-family: "STSong", "Songti SC", "Noto Serif CJK SC", serif;
+      line-height: 1.15;
+    }
+
+    h1 {
+      margin-top: 20px;
+      font-size: clamp(2.4rem, 5vw, 4.6rem);
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      max-width: 860px;
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr;
+      gap: 28px;
+      margin-top: 28px;
+    }
+
+    .hero-card,
+    .card,
+    .page-card,
+    .faq-item,
+    .tip-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 16px 50px rgba(75, 53, 35, 0.08);
+    }
+
+    .hero-card {
+      padding: 22px;
+    }
+
+    .hero-card h3 {
+      font-size: 1.18rem;
+      margin-bottom: 10px;
+    }
+
+    .hero-list,
+    .checklist,
+    .steps,
+    .mini-list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .hero-list li,
+    .checklist li,
+    .steps li,
+    .mini-list li {
+      margin: 8px 0;
+    }
+
+    .section {
+      margin-top: 32px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 252, 247, 0.82);
+      box-shadow: 0 12px 42px rgba(75, 53, 35, 0.06);
+    }
+
+    .section-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .section-heading p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 760px;
+    }
+
+    h2 {
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+    }
+
+    h3 {
+      font-size: 1.24rem;
+    }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.55);
+      font-weight: 600;
+      color: var(--ink);
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .toc a:hover {
+      transform: translateY(-2px);
+      text-decoration: none;
+      border-color: rgba(184, 76, 42, 0.38);
+      background: rgba(255, 244, 236, 0.9);
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card,
+    .page-card,
+    .faq-item,
+    .tip-card {
+      padding: 20px;
+    }
+
+    .card p,
+    .page-card p,
+    .faq-item p,
+    .tip-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 79, 0.10);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .flow {
+      display: grid;
+      gap: 14px;
+      counter-reset: item;
+    }
+
+    .flow-item {
+      position: relative;
+      padding: 18px 18px 18px 64px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.62);
+    }
+
+    .flow-item::before {
+      counter-increment: item;
+      content: counter(item);
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #d36a45);
+      box-shadow: 0 10px 20px rgba(184, 76, 42, 0.20);
+    }
+
+    .flow-item h3 {
+      margin-bottom: 6px;
+    }
+
+    .callout {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-left: 4px solid var(--accent);
+      border-radius: 14px;
+      background: rgba(245, 211, 191, 0.38);
+      color: #5b382c;
+    }
+
+    .callout.good {
+      border-left-color: var(--green);
+      background: rgba(47, 107, 79, 0.10);
+      color: #274739;
+    }
+
+    .callout.warn {
+      border-left-color: var(--gold);
+      background: rgba(156, 106, 18, 0.12);
+      color: #5a4519;
+    }
+
+    .page-card h3 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(184, 76, 42, 0.10);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(76, 57, 42, 0.10);
+    }
+
+    th {
+      background: rgba(184, 76, 42, 0.08);
+      font-weight: 700;
+    }
+
+    code {
+      padding: 2px 7px;
+      border-radius: 8px;
+      background: rgba(31, 26, 23, 0.07);
+      font-family: "SFMono-Regular", "Fira Code", "JetBrains Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    .footer {
+      margin-top: 28px;
+      padding: 22px 24px;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(255, 251, 245, 0.92), rgba(247, 239, 229, 0.92));
+      color: var(--muted);
+    }
+
+    @media (max-width: 960px) {
+      .hero {
+        padding: 28px;
+      }
+
+      .hero-grid,
+      .grid.two,
+      .grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .section {
+        padding: 22px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .hero,
+      .section,
+      .footer {
+        box-shadow: none;
+        background: #fff;
+      }
+
+      .toc a {
+        background: #fff;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="eyebrow">User Guide · 牙科设备推荐Agent</div>
+      <h1>从“数据导入”到“推荐落地”<br />一份真正能上手的完整使用指南</h1>
+      <p>
+        这套系统不是一个单纯的聊天机器人，也不是一张静态报表。
+        它是一套围绕 <strong>商品主数据、客户购买记录、用户画像、推荐生成、Agent 辅助操作</strong>
+        组成的业务工作台。你可以把它理解为一位懂牙科设备、懂采购节奏、还能帮你整理数据和解释推荐理由的智能助手。
+      </p>
+      <div class="hero-grid">
+        <div class="hero-card">
+          <h3>你可以用它做什么</h3>
+          <ul class="hero-list">
+            <li>导入和维护牙科设备/耗材/配件商品数据</li>
+            <li>导入客户购买记录，沉淀真实采购行为</li>
+            <li>自动生成用户画像，识别偏好、价值等级与补货节奏</li>
+            <li>基于多路召回与 LLM 排序生成推荐结果</li>
+            <li>通过 Agent 对话查询信息、解释推荐、辅助执行操作</li>
+            <li>对推荐结果做采纳/拒绝反馈，帮助系统持续优化</li>
+          </ul>
+        </div>
+        <div class="hero-card">
+          <h3>第一次使用前请牢记</h3>
+          <ul class="hero-list">
+            <li>系统的效果高度依赖数据质量，尤其是 SKU、客户 ID、购买日期。</li>
+            <li>建议先完成“系统设置”，再导入数据。</li>
+            <li>推荐结果不是一次点击就神奇出现，它依赖前面的商品、购买、画像链路。</li>
+            <li>如果页面提示“连接失败”或“模型为空”，先回到系统设置检查模型与 API 配置。</li>
+          </ul>
+        </div>
+      </div>
+    </header>
+
+    <section class="section" id="toc">
+      <div class="section-heading">
+        <div>
+          <h2>目录导航</h2>
+          <p>如果你想一步步跟着走，建议按顺序阅读；如果你已经在使用，可以直接跳到对应页面说明。</p>
+        </div>
+      </div>
+      <nav class="toc">
+        <a href="#quick-start">01. 首次上手流程</a>
+        <a href="#roles">02. 适合谁使用</a>
+        <a href="#pages">03. 页面总览</a>
+        <a href="#settings">04. 系统设置</a>
+        <a href="#products">05. 商品管理</a>
+        <a href="#purchases">06. 购买记录</a>
+        <a href="#profiles">07. 用户画像</a>
+        <a href="#recommendations">08. 推荐结果</a>
+        <a href="#chat">09. Agent 对话</a>
+        <a href="#token-budget">10. Token 预算预估</a>
+        <a href="#workflow">11. 标准工作流</a>
+        <a href="#faq">12. 常见问题</a>
+        <a href="#best-practice">13. 使用建议</a>
+      </nav>
+    </section>
+
+    <section class="section" id="quick-start">
+      <div class="section-heading">
+        <div>
+          <h2>01. 首次上手流程</h2>
+          <p>如果你今天是第一次打开系统，请不要乱跳页面。最顺的路线是“先连模型，再导数据，再算画像，再看推荐”。</p>
+        </div>
+        <span class="badge">建议阅读 5 分钟</span>
+      </div>
+      <div class="flow">
+        <div class="flow-item">
+          <h3>先进入「系统设置」</h3>
+          <p>
+            填写 <code>Base URL</code>、<code>API Key</code>，然后点击
+            <strong>测试连接</strong> 与 <strong>获取模型列表</strong>。
+            成功后，分别选择：
+            推荐/对话模型、增强/批量模型、Embedding 模型，再保存配置。
+          </p>
+        </div>
+        <div class="flow-item">
+          <h3>导入商品数据</h3>
+          <p>
+            进入「商品管理 → 原始商品」，导入包含 SKU、商品名称、旧 SKU、状态等信息的商品 Excel。
+            这是系统理解“卖什么”的基础。
+          </p>
+        </div>
+        <div class="flow-item">
+          <h3>执行商品增强</h3>
+          <p>
+            进入「商品管理 → 增强商品」，点击 <strong>开始 LLM 增强</strong>。
+            系统会为商品补充分类、用途、耗材、配件、关键词等结构化信息。
+          </p>
+        </div>
+        <div class="flow-item">
+          <h3>构建关系图谱</h3>
+          <p>
+            在增强商品页面继续构建关系，或进入「关系图谱」查看结果。
+            这一步会让系统更擅长理解“哪些商品会一起买、互补、替代或配套”。
+          </p>
+        </div>
+        <div class="flow-item">
+          <h3>导入购买记录</h3>
+          <p>
+            进入「购买记录」，导入客户历史购买明细。系统会基于这些记录生成用户画像，并为推荐提供真实业务依据。
+          </p>
+        </div>
+        <div class="flow-item">
+          <h3>查看画像并生成推荐</h3>
+          <p>
+            导入完成后先到「用户画像」看客户标签和补货提醒，再到「推荐结果」为单个客户或全部客户生成推荐。
+          </p>
+        </div>
+      </div>
+      <div class="callout good">
+        <strong>一句话记忆：</strong>
+        先让系统知道“卖什么”，再让系统知道“谁买了什么”，它才可能给出有业务意义的推荐。
+      </div>
+    </section>
+
+    <section class="section" id="roles">
+      <div class="section-heading">
+        <div>
+          <h2>02. 适合谁使用</h2>
+          <p>不同角色进入系统时，关注重点不同。你可以对照自己的岗位，快速定位常用页面。</p>
+        </div>
+      </div>
+      <div class="grid three">
+        <div class="card">
+          <h3>销售 / 客户经理</h3>
+          <p>重点关注用户画像、推荐结果、Agent 对话。你最常用的是：查客户、看推荐理由、跟进补货提醒。</p>
+        </div>
+        <div class="card">
+          <h3>运营 / 数据管理员</h3>
+          <p>重点关注商品管理、购买记录、系统设置。你最重要的工作是把数据导对、导全、导干净。</p>
+        </div>
+        <div class="card">
+          <h3>管理者 / 负责人</h3>
+          <p>重点看推荐结果是否合理、画像是否可信、反馈是否被系统吸收，以及整体使用流程是否顺畅。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="pages">
+      <div class="section-heading">
+        <div>
+          <h2>03. 页面总览</h2>
+          <p>系统左侧菜单大致分成 7 类。下面这张表可以帮助你迅速理解“哪里做什么”。</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>页面</th>
+              <th>主要用途</th>
+              <th>适合什么时候打开</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Agent 对话</td>
+              <td>自然语言查询、解释推荐、辅助执行操作</td>
+              <td>你不想翻页面，想直接问“某个客户最近该推什么”时</td>
+            </tr>
+            <tr>
+              <td>原始商品</td>
+              <td>维护商品主数据、SKU、旧 SKU、状态</td>
+              <td>导商品、修 SKU、排查主数据问题时</td>
+            </tr>
+            <tr>
+              <td>增强商品</td>
+              <td>查看 LLM 补充后的分类、关键词、耗材、配件等信息</td>
+              <td>导完商品后，准备让系统更聪明地理解商品时</td>
+            </tr>
+            <tr>
+              <td>关系图谱</td>
+              <td>查看商品之间的结构关系和网络</td>
+              <td>想理解配套、同系列、共现关系时</td>
+            </tr>
+            <tr>
+              <td>购买记录</td>
+              <td>导入、编辑、查询客户采购明细</td>
+              <td>数据刚拿到、要修正购买记录、要核对客户历史时</td>
+            </tr>
+            <tr>
+              <td>用户画像</td>
+              <td>查看客户活跃度、偏好、价值层级、补货提醒</td>
+              <td>推荐前先确认客户情况时</td>
+            </tr>
+            <tr>
+              <td>推荐结果</td>
+              <td>生成推荐、看理由、做采纳/拒绝反馈</td>
+              <td>要输出推荐方案、复核推荐质量时</td>
+            </tr>
+            <tr>
+              <td>系统设置</td>
+              <td>配置模型、超时、LangSmith、连接状态</td>
+              <td>首次部署、切换模型、排查连接问题时</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="settings">
+      <div class="section-heading">
+        <div>
+          <h2>04. 系统设置：系统能不能用，先看这里</h2>
+          <p>如果系统像发动机，这一页就是点火系统。模型没配好，后面所有智能能力都会受影响。</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="page-card">
+          <h3>连接配置 <span class="tag">最优先</span></h3>
+          <ul class="mini-list">
+            <li><strong>Base URL</strong>：模型服务地址，例如 OpenAI 或兼容平台地址。</li>
+            <li><strong>API Key</strong>：访问模型服务的密钥。</li>
+            <li><strong>测试连接</strong>：用于确认系统能否连通模型服务。</li>
+            <li><strong>获取模型列表</strong>：拉取当前账号实际可用模型。</li>
+          </ul>
+        </div>
+        <div class="page-card">
+          <h3>模型选择 <span class="tag">直接影响效果</span></h3>
+          <ul class="mini-list">
+            <li><strong>推荐/对话模型</strong>：负责 Agent 对话和推荐排序。</li>
+            <li><strong>增强/批量模型</strong>：负责商品增强、批量结构化处理。</li>
+            <li><strong>Embedding 模型</strong>：负责向量表示与相关召回能力。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warn">
+        <strong>重要提醒：</strong>
+        请先点击“获取模型列表”，再选择模型。不要随便手填一个看起来像模型名的字符串，除非你非常确定该模型可用。
+      </div>
+      <div class="grid two" style="margin-top: 18px;">
+        <div class="card">
+          <h3>高级设置</h3>
+          <p>
+            包括 <code>temperature</code>、<code>max_tokens</code>、<code>timeout</code>。
+            默认情况下，大多数用户可以沿用系统建议值；只有在你已经熟悉模型行为时，才建议修改。
+          </p>
+        </div>
+        <div class="card">
+          <h3>LangSmith 监控</h3>
+          <p>
+            如果你的团队需要追踪 LLM 调用链路、分析问题或做效果监控，可以在这里开启 LangSmith。
+            如果你只是日常业务使用，可以先不启用。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="products">
+      <div class="section-heading">
+        <div>
+          <h2>05. 商品管理：把“卖什么”讲清楚</h2>
+          <p>推荐效果好不好，首先取决于商品主数据是不是干净、完整、可理解。</p>
+        </div>
+      </div>
+      <div class="grid three">
+        <div class="page-card">
+          <h3>原始商品</h3>
+          <p>维护 SKU、商品名称、旧 SKU、在售/停售状态等核心信息。这里是所有后续能力的底座。</p>
+          <ul class="mini-list">
+            <li>支持 Excel 导入</li>
+            <li>支持手工新增、编辑、删除</li>
+            <li>支持 SKU 与旧 SKU 映射维护</li>
+          </ul>
+        </div>
+        <div class="page-card">
+          <h3>增强商品</h3>
+          <p>通过 LLM 把原始商品描述增强成结构化知识，例如品牌、分类、使用场景、关键词、耗材、配件等。</p>
+          <ul class="mini-list">
+            <li>先导商品，再做增强</li>
+            <li>增强后可进一步构建关系图谱</li>
+            <li>增强结果会直接影响推荐质量</li>
+          </ul>
+        </div>
+        <div class="page-card">
+          <h3>关系图谱</h3>
+          <p>帮助你看清商品之间的连接关系，例如同系列、消耗品、配件、互补关系和共现采购关系。</p>
+          <ul class="mini-list">
+            <li>可筛选关系类型</li>
+            <li>适合复核系统的“商品理解”是否符合业务常识</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>推荐的商品数据处理顺序：</strong>
+        先导入原始商品 → 检查 SKU 和状态 → 执行 LLM 增强 → 构建关系图谱 → 再进入客户和推荐环节。
+      </div>
+    </section>
+
+    <section class="section" id="purchases">
+      <div class="section-heading">
+        <div>
+          <h2>06. 购买记录：系统真正“认识客户”的地方</h2>
+          <p>如果商品数据告诉系统“你卖什么”，购买记录就是在告诉系统“客户真正买了什么、多久买一次、买多少”。</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h3>支持的操作</h3>
+          <ul class="mini-list">
+            <li>Excel 导入客户购买记录</li>
+            <li>按客户 ID、日期范围搜索</li>
+            <li>手工新增、编辑、删除单条记录</li>
+            <li>按用户分组查看采购情况</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>你最应该关注的数据质量</h3>
+          <ul class="mini-list">
+            <li><strong>客户 ID</strong> 要稳定，不要同一客户多个写法。</li>
+            <li><strong>SKU</strong> 要尽量和商品主数据对得上。</li>
+            <li><strong>购买日期</strong> 决定了活跃度、采购周期、补货提醒。</li>
+            <li><strong>数量</strong> 影响客户价值和采购强度判断。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout good">
+        <strong>实用建议：</strong>
+        每次导入购买记录后，最好去“用户画像”抽查几个客户，看看画像是否符合你的业务直觉。
+      </div>
+    </section>
+
+    <section class="section" id="profiles">
+      <div class="section-heading">
+        <div>
+          <h2>07. 用户画像：把冷冰冰的购买记录变成可读的客户判断</h2>
+          <p>画像不是给系统自己看的，而是给业务人员快速判断客户状态用的。</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="page-card">
+          <h3>画像通常会告诉你什么</h3>
+          <ul class="mini-list">
+            <li>客户最近是否活跃</li>
+            <li>偏爱哪些品类、品牌、产品类型</li>
+            <li>采购频率和可能的补货周期</li>
+            <li>客户价值层级（高 / 中 / 低）</li>
+            <li>需要重点关注的补货提醒</li>
+          </ul>
+        </div>
+        <div class="page-card">
+          <h3>如何读懂画像</h3>
+          <p>
+            不要只盯着一个字段。最有价值的方式是把“最近活跃度 + 品类偏好 + 补货信号”一起看。
+            例如：某客户近期活跃、偏好口腔耗材、某类采购周期已临近，那么这类商品推荐通常更值得优先跟进。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="recommendations">
+      <div class="section-heading">
+        <div>
+          <h2>08. 推荐结果：从“建议什么”走到“为什么建议”</h2>
+          <p>这一页不是只给出一个 SKU 列表，而是要给出可被业务理解、解释、复核的推荐结果。</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h3>你可以怎么用</h3>
+          <ul class="mini-list">
+            <li>为单个客户生成推荐</li>
+            <li>批量为多个客户生成推荐</li>
+            <li>查看推荐理由、置信度、来源</li>
+            <li>对推荐做采纳 / 拒绝反馈</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>你应该如何复核</h3>
+          <ul class="mini-list">
+            <li>先看这个客户是否真的有对应品类历史</li>
+            <li>再看推荐理由是否能解释得通</li>
+            <li>最后看推荐来源和置信度，判断是否值得给客户</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warn">
+        <strong>请记住：</strong>
+        推荐结果是“辅助决策”，不是“无条件执行”。业务人员的判断仍然非常重要。
+      </div>
+    </section>
+
+    <section class="section" id="chat">
+      <div class="section-heading">
+        <div>
+          <h2>09. Agent 对话：最适合“我想直接问”的场景</h2>
+          <p>如果你不想在多个页面来回切，Agent 对话页就是你的快捷入口。</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="page-card">
+          <h3>它能帮你做什么</h3>
+          <ul class="mini-list">
+            <li>查询商品信息、客户画像、购买记录</li>
+            <li>解释推荐为什么这么排</li>
+            <li>辅助添加或删除购买记录</li>
+            <li>触发推荐生成等操作</li>
+            <li>展示思考过程和工具调用过程</li>
+          </ul>
+        </div>
+        <div class="page-card">
+          <h3>怎么提问更有效</h3>
+          <ul class="mini-list">
+            <li>带上明确客户 ID，例如：<code>帮我看 KH3734 最近该推荐什么</code></li>
+            <li>带上 SKU 或商品名，例如：<code>VZ001286 是什么商品，适合搭配什么</code></li>
+            <li>如果要执行操作，尽量说清楚时间、数量、SKU、客户 ID</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout good">
+        <strong>一个很好用的习惯：</strong>
+        先用 Agent 查询和解释，再去对应页面做复核，这样效率会很高。
+      </div>
+    </section>
+
+    <section class="section" id="token-budget">
+      <div class="section-heading">
+        <div>
+          <h2>10. Token 使用量预估：先算账，再开跑</h2>
+          <p>
+            这是非常重要的一节。很多用户不是系统用不好，而是在批量增强、批量推荐、长对话过程中，
+            没有提前预估 Token 消耗，结果 API 额度、余额或并发资源不够，中途被迫终止。
+          </p>
+        </div>
+        <span class="badge">强烈建议上线前阅读</span>
+      </div>
+
+      <div class="callout warn">
+        <strong>先说明白：</strong>
+        下面的数字是<strong>经验预估值</strong>，目的是帮助你判断“资源大概够不够”，不是账单精确值。
+        实际消耗会受到模型种类、商品名称长度、购买记录多少、候选数量、对话轮数、以及模型输出长度影响。
+      </div>
+
+      <div class="grid two" style="margin-top: 18px;">
+        <div class="card">
+          <h3>系统里真正会消耗 LLM / Embedding Token 的地方</h3>
+          <ul class="mini-list">
+            <li><strong>商品增强</strong>：每个商品 1 次结构化抽取 + 1 次 embedding</li>
+            <li><strong>推荐生成</strong>：每个用户通常 1 次查询 embedding + 1 次 LLM 排序</li>
+            <li><strong>Agent 对话</strong>：每轮至少 1 次模型调用，带工具时往往是多次</li>
+            <li><strong>知识图谱自动构建</strong>：按品类分组做关系推断，每组 1 次 LLM 调用</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>哪些操作几乎不消耗 Token</h3>
+          <ul class="mini-list">
+            <li>查看原始商品列表、购买记录、画像、推荐结果</li>
+            <li>系统设置里的“获取模型列表”与“测试连接”</li>
+            <li>关系图谱的查看、筛选、缩放</li>
+            <li>普通数据库查询与页面分页</li>
+          </ul>
+          <p>也就是说，真正需要预算的，是“增强”“推荐”“对话”“图谱推断”这几类智能操作。</p>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 18px;">
+        <table>
+          <thead>
+            <tr>
+              <th>功能</th>
+              <th>大致调用方式</th>
+              <th>单次预估 Token</th>
+              <th>100 次 / 100 条量级预估</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>商品增强（单个商品）</td>
+              <td>1 次 LLM 抽取 + 1 次 embedding</td>
+              <td><strong>600 ~ 1,100</strong></td>
+              <td><strong>6 万 ~ 11 万</strong></td>
+              <td>最常见的批量消耗项，商品名越长、输出越详细，消耗越高。</td>
+            </tr>
+            <tr>
+              <td>推荐生成（单个用户）</td>
+              <td>1 次查询 embedding + 1 次 LLM 排序</td>
+              <td><strong>800 ~ 1,800</strong></td>
+              <td><strong>8 万 ~ 18 万</strong></td>
+              <td>会受最近购买记录条数、候选商品数量、推荐理由长度影响。</td>
+            </tr>
+            <tr>
+              <td>Agent 对话（简单问答）</td>
+              <td>1 次对话模型调用</td>
+              <td><strong>400 ~ 1,400</strong></td>
+              <td><strong>4 万 ~ 14 万</strong></td>
+              <td>适合问“这是什么商品”“这个客户什么情况”这类轻查询。</td>
+            </tr>
+            <tr>
+              <td>Agent 对话（带工具查询）</td>
+              <td>通常 2 次模型调用 + 1 次工具查询</td>
+              <td><strong>800 ~ 2,500</strong></td>
+              <td><strong>8 万 ~ 25 万</strong></td>
+              <td>例如“帮我查 KH3734 最近买了什么并解释推荐”。</td>
+            </tr>
+            <tr>
+              <td>Agent 对话（带写操作确认）</td>
+              <td>多轮模型调用 + 确认恢复</td>
+              <td><strong>1,200 ~ 3,500</strong></td>
+              <td><strong>12 万 ~ 35 万</strong></td>
+              <td>例如通过助理添加购买记录、删除记录、生成推荐。</td>
+            </tr>
+            <tr>
+              <td>知识图谱自动构建（每个品类分组）</td>
+              <td>1 次 LLM 关系推断</td>
+              <td><strong>1,000 ~ 2,400</strong></td>
+              <td><strong>10 组约 1 万 ~ 2.4 万</strong></td>
+              <td>通常不是按“每个商品”计，而是按“每个品类分组”计。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid two" style="margin-top: 18px;">
+        <div class="page-card">
+          <h3>商品增强预算怎么估</h3>
+          <p>
+            当前系统的商品增强流程是：<strong>每个商品 1 次结构化抽取 + 1 次 embedding</strong>。
+            所以最简单的估算公式是：
+          </p>
+          <p><code>总 Token ≈ 商品条数 × 600 ~ 1,100</code></p>
+          <ul class="mini-list">
+            <li>10 条商品：约 <strong>6,000 ~ 11,000</strong></li>
+            <li>100 条商品：约 <strong>60,000 ~ 110,000</strong></li>
+            <li>1,000 条商品：约 <strong>60 万 ~ 110 万</strong></li>
+          </ul>
+          <p>
+            如果你一次要增强几千条商品，建议先抽样跑 20~50 条，确认效果和消耗，再全量执行。
+          </p>
+        </div>
+        <div class="page-card">
+          <h3>推荐生成预算怎么估</h3>
+          <p>
+            推荐生成通常是：<strong>1 次查询 embedding + 1 次 LLM 排序</strong>。
+            所以可以粗略按下面公式估：
+          </p>
+          <p><code>总 Token ≈ 用户数 × 800 ~ 1,800</code></p>
+          <ul class="mini-list">
+            <li>10 个用户：约 <strong>8,000 ~ 18,000</strong></li>
+            <li>100 个用户：约 <strong>8 万 ~ 18 万</strong></li>
+            <li>1,000 个用户：约 <strong>80 万 ~ 180 万</strong></li>
+          </ul>
+          <p>
+            如果你准备做“全量客户批量推荐”，这个预算一定要提前看，否则很容易在中途停掉。
+          </p>
+        </div>
+      </div>
+
+      <div class="grid two" style="margin-top: 18px;">
+        <div class="card">
+          <h3>Agent 对话为什么有时特别费 Token</h3>
+          <p>
+            因为对话不是永远只打一轮模型。带工具的 ReAct 对话通常会经历：
+            “理解问题 → 决定调用什么工具 → 读工具结果 → 再组织回复”。
+            如果再加上写操作确认、恢复执行，轮次还会继续增加。
+          </p>
+          <ul class="mini-list">
+            <li>只问一句简单问题：一般最省</li>
+            <li>查询客户画像/购买记录/商品信息：中等消耗</li>
+            <li>让 Agent 帮你执行写操作：相对更贵</li>
+            <li>让 Agent 生成推荐：会叠加“推荐生成”的预算</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>知识图谱自动构建怎么估</h3>
+          <p>
+            这部分不是按单条商品算，而是按<strong>品类分组</strong>算。系统会把同一品类的一批增强商品组合成一个 prompt，
+            推断它们之间的治疗流程关系。
+          </p>
+          <ul class="mini-list">
+            <li>1 个品类组：约 <strong>1,000 ~ 2,400</strong> Token</li>
+            <li>5 个品类组：约 <strong>5,000 ~ 12,000</strong> Token</li>
+            <li>10 个品类组：约 <strong>1 万 ~ 2.4 万</strong> Token</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>推荐的预算策略：</strong>
+        不要按“理论刚刚够”去准备额度，建议至少预留 <strong>1.5 倍到 2 倍缓冲</strong>。
+        比如你预估 10 万 Token，会更稳妥的做法是按 15 万到 20 万来准备。
+      </div>
+
+      <div class="grid three" style="margin-top: 18px;">
+        <div class="tip-card">
+          <h3>场景 1：首次导入 100 条商品</h3>
+          <p>
+            建议预算：<strong>6 万 ~ 11 万 Token</strong>。<br />
+            如果你还要顺手构建知识图谱，再额外预留 <strong>1 万 ~ 2 万</strong> Token 会更稳。
+          </p>
+        </div>
+        <div class="tip-card">
+          <h3>场景 2：给 100 个客户批量生成推荐</h3>
+          <p>
+            建议预算：<strong>8 万 ~ 18 万 Token</strong>。<br />
+            如果客户购买记录很多、推荐理由写得更细，建议按上限甚至 1.5 倍准备。
+          </p>
+        </div>
+        <div class="tip-card">
+          <h3>场景 3：业务同事连续用 Agent</h3>
+          <p>
+            如果一天大概进行 100 轮混合型对话，建议预留：
+            <strong>8 万 ~ 25 万 Token</strong>。<br />
+            若经常通过 Agent 直接执行操作或生成推荐，预算要再往上加。
+          </p>
+        </div>
+      </div>
+
+      <div class="callout good">
+        <strong>最实用的做法：</strong>
+        首次上线时，不要一上来就跑“1000 条商品增强”或“全客户批量推荐”。先用
+        <strong>20 条商品</strong>、<strong>10 个客户</strong> 做试运行，把实际消耗看出来，再放大规模。
+      </div>
+    </section>
+
+    <section class="section" id="workflow">
+      <div class="section-heading">
+        <div>
+          <h2>11. 一条推荐的标准工作流</h2>
+          <p>下面这套流程最适合新团队复制执行。照着走，能最大程度避免“系统没问题，但结果看不懂”的情况。</p>
+        </div>
+      </div>
+      <div class="flow">
+        <div class="flow-item">
+          <h3>步骤 1：完成系统设置</h3>
+          <p>确认连接成功、模型列表已获取、三类模型都选好，并且配置已经保存。</p>
+        </div>
+        <div class="flow-item">
+          <h3>步骤 2：导入商品 Excel</h3>
+          <p>先把商品底座建好。尤其要关注 SKU、旧 SKU、状态字段是否正确。</p>
+        </div>
+        <div class="flow-item">
+          <h3>步骤 3：执行商品增强与图谱构建</h3>
+          <p>这一步决定系统对商品的“理解深度”，也决定后面推荐理由是否自然、专业。</p>
+        </div>
+        <div class="flow-item">
+          <h3>步骤 4：导入购买记录</h3>
+          <p>把真实客户采购历史带进来，系统才能建立用户画像与补货节奏。</p>
+        </div>
+        <div class="flow-item">
+          <h3>步骤 5：抽查用户画像</h3>
+          <p>随机抽几个重要客户，看看价值等级、偏好和补货提醒是否符合常识。</p>
+        </div>
+        <div class="flow-item">
+          <h3>步骤 6：生成推荐并复核</h3>
+          <p>看推荐结果页面的理由、置信度、来源；必要时回到 Agent 对话做进一步解释。</p>
+        </div>
+        <div class="flow-item">
+          <h3>步骤 7：记录反馈</h3>
+          <p>对明显靠谱的推荐做采纳，对不合适的推荐做拒绝，帮助系统逐渐贴近你的真实业务偏好。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="section-heading">
+        <div>
+          <h2>12. 常见问题</h2>
+          <p>如果你遇到问题，先看这里。很多“系统问题”其实是配置没填全、数据没导全、或顺序没走对。</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="faq-item">
+          <h3>Q1：为什么我保存系统设置失败？</h3>
+          <p>
+            通常先检查：<code>Base URL</code>、<code>API Key</code>、三个模型、以及高级设置中的
+            <code>temperature</code>、<code>max_tokens</code>、<code>timeout</code> 是否都有值。
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3>Q2：为什么推荐结果为空？</h3>
+          <p>
+            先确认是否已经导入购买记录；再确认商品增强是否执行过；最后查看该客户是否有足够历史数据。
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3>Q3：为什么 Agent 回答得不够准？</h3>
+          <p>
+            通常有三类原因：模型配置不合适、底层数据不完整，或者提问过于模糊。请尽量带上客户 ID、SKU、日期等具体信息。
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3>Q4：导入购买记录后该先看什么？</h3>
+          <p>
+            先看“用户画像”。如果画像都不合理，直接看推荐通常只会更困惑。
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3>Q5：为什么某些商品看起来关系很奇怪？</h3>
+          <p>
+            先检查原始商品名称和分类是否合理，再看增强结果是否偏离业务语义。商品关系图谱本质上依赖前面的商品数据质量。
+          </p>
+        </div>
+        <div class="faq-item">
+          <h3>Q6：这套系统能完全替代人工判断吗？</h3>
+          <p>
+            不能。它最擅长的是“整理信息、发现线索、解释依据”，最终对客户是否推荐、何时推荐，仍建议由业务人员把关。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="best-practice">
+      <div class="section-heading">
+        <div>
+          <h2>13. 最后给使用者的建议</h2>
+          <p>如果你想让系统越用越顺，下面这几条经验非常值得坚持。</p>
+        </div>
+      </div>
+      <div class="grid three">
+        <div class="tip-card">
+          <h3>保持数据命名稳定</h3>
+          <p>同一个客户、同一个 SKU，请尽量始终使用同一种写法。稳定的主键，是系统理解业务的基础。</p>
+        </div>
+        <div class="tip-card">
+          <h3>先抽查，再批量</h3>
+          <p>无论是商品增强还是推荐生成，都建议先抽样看几个结果，确认方向没偏，再做大批量操作。</p>
+        </div>
+        <div class="tip-card">
+          <h3>形成反馈闭环</h3>
+          <p>推荐被采纳还是被拒绝，最好都留下反馈。系统真正变“懂你”，靠的不是一次配置，而是持续反馈。</p>
+        </div>
+      </div>
+      <div class="callout good">
+        <strong>最重要的一句话：</strong>
+        把它当成一个懂业务的智能助手，而不是一个会自动替你做决定的黑盒子。你越愿意和它配合，它给你的价值就越大。
+      </div>
+    </section>
+
+    <footer class="footer">
+      <h3>附：推荐阅读顺序</h3>
+      <p>
+        如果这是你第一次接触本系统，请按这个顺序操作：
+        <strong>系统设置 → 商品管理 → 购买记录 → 用户画像 → 推荐结果 → Agent 对话</strong>。
+        这样你会最容易理解系统逻辑，也最不容易在中途因为数据或配置问题卡住。
+      </p>
+      <p>
+        本文件为项目使用指南 HTML 版本，可直接在浏览器中打开，也可以发给业务同事、运营同事或客户成功团队作为培训材料。
+      </p>
+    </footer>
+  </div>
+</body>
+</html>
